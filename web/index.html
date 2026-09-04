@@ -31,7 +31,84 @@
 
   <title>film_schedule</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+  /* Netlifyバッジを非表示 */
+  [data-netlify-badge],
+  a[href*="netlify.com"] img,
+  .netlify-badge,
+  #netlify-badge {
+    display: none !important;
+    visibility: hidden !important;
+  }
+</style>
 </head>
+<script>
+  // Netlifyバッジを強制削除
+  document.addEventListener('DOMContentLoaded', function() {
+    const remove = () => {
+      document.querySelectorAll(
+        '[data-netlify-badge], a[href*="netlify.com"] img, ' +
+        '.netlify-badge, #netlify-badge, ' +
+        'a[href="https://www.netlify.com"]'
+      ).forEach(el => el.remove());
+    };
+    remove();
+    // 遅れて挿入される場合も対応
+    setTimeout(remove, 500);
+    setTimeout(remove, 1500);
+  });
+</script>
+<script>
+// FlutterWebでOSからのファイルドロップを受け取るJS
+window.addEventListener('dragover', function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+window.addEventListener('drop', function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  const files = e.dataTransfer.files;
+  if (!files || files.length === 0) return;
+  
+  const file = files[0];
+  const ext = file.name.split('.').pop().toLowerCase();
+  const allowed = ['pdf', 'txt', 'md', 'fountain', 'fdx', 'stry'];
+  
+  if (!allowed.includes(ext)) {
+    alert('PDF / TXT / MD / STRY ファイルのみ対応しています');
+    return;
+  }
+  
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    // FlutterのDartコードにデータを渡す（LocalStorageを経由）
+    if (ext === 'pdf') {
+      // PDFはbase64で保存
+      const base64 = ev.target.result.split(',')[1];
+      localStorage.setItem('dropped_file_type', 'pdf');
+      localStorage.setItem('dropped_file_name', file.name);
+      localStorage.setItem('dropped_file_data', base64);
+    } else {
+      // テキストはそのまま保存
+      localStorage.setItem('dropped_file_type', 'text');
+      localStorage.setItem('dropped_file_name', file.name);
+      localStorage.setItem('dropped_file_data', ev.target.result);
+    }
+    localStorage.setItem('dropped_file_ready', 'true');
+    // ページをリロードせずにFlutter側に通知
+    window.dispatchEvent(new CustomEvent('fileDropped', {detail: {name: file.name, type: ext}}));
+  };
+  
+  if (ext === 'pdf') {
+    reader.readAsDataURL(file);
+  } else {
+    reader.readAsText(file, 'UTF-8');
+  }
+});
+</script>
+
 <body>
   <!--
     You can customize the "flutter_bootstrap.js" script.

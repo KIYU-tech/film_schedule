@@ -15,6 +15,13 @@ class ProjectProvider extends ChangeNotifier {
   List<EquipmentItem> _equipment = [];
   List<BudgetItem> _budget = [];
   List<GanttTask> _gantt = [];
+  List<LiveAct> _liveActs = [];
+  List<EventCorner> _eventCorners = [];
+  List<ConferenceSession> _conferenceSessions = [];
+  List<ScriptFile> _scripts = [];
+  List<CharacterDetail> _characters = [];
+  List<TransportCost> _transports = [];
+  List<ProductionItem> _productions = [];
   Project? _currentProject;
 
   // Supabaseクライアントのショートカット
@@ -46,6 +53,24 @@ class ProjectProvider extends ChangeNotifier {
       .where((e) => e.projectId == _currentProject?.id).toList();
   List<BudgetItem> get budgetItems => _budget
       .where((b) => b.projectId == _currentProject?.id).toList();
+  List<LiveAct> get liveActs => _liveActs
+      .where((a) => a.projectId == _currentProject?.id).toList()
+    ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
+  List<EventCorner> get eventCorners => _eventCorners
+      .where((c) => c.projectId == _currentProject?.id).toList()
+    ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
+  List<ConferenceSession> get conferenceSessions => _conferenceSessions
+      .where((s) => s.projectId == _currentProject?.id).toList()
+    ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
+  List<ScriptFile> get scripts => _scripts
+      .where((s) => s.projectId == _currentProject?.id).toList();
+  List<CharacterDetail> get characters => _characters
+      .where((c) => c.projectId == _currentProject?.id).toList();
+  List<TransportCost> get transports => _transports
+      .where((t) => t.projectId == _currentProject?.id).toList();
+  List<ProductionItem> get productions => _productions
+      .where((p) => p.projectId == _currentProject?.id).toList()
+    ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
   List<GanttTask> get ganttTasks => _gantt
       .where((g) => g.projectId == _currentProject?.id).toList();
 
@@ -79,6 +104,7 @@ class ProjectProvider extends ChangeNotifier {
         extraInfo: Map<String, String>.from(
           (e['extra_info'] as Map? ?? {}).map(
             (k, v) => MapEntry(k.toString(), v.toString()))),
+        eventDate: e['event_date'] != null ? DateTime.parse(e['event_date']) : null,
         createdAt: DateTime.parse(e['created_at']),
         updatedAt: DateTime.parse(e['updated_at']),
       )).toList();
@@ -93,6 +119,7 @@ class ProjectProvider extends ChangeNotifier {
         availability: Map<String, String>.from(
           (e['availability'] as Map? ?? {}).map(
             (k, v) => MapEntry(k.toString(), v.toString()))),
+        photoBase64: e['photo_base64'],
       )).toList();
 
       final cr = await _sb.from('crew_members').select()
@@ -201,6 +228,7 @@ class ProjectProvider extends ChangeNotifier {
       'typeKey': p.typeKey, 'venue': p.venue,
       'formatType': p.formatType, 'memo': p.memo,
       'extraInfo': p.extraInfo,
+      'eventDate': p.eventDate?.toIso8601String(),
       'createdAt': p.createdAt.toIso8601String(),
       'updatedAt': p.updatedAt.toIso8601String(),
     }).toList()));
@@ -208,11 +236,12 @@ class ProjectProvider extends ChangeNotifier {
       'id': c.id, 'projectId': c.projectId, 'name': c.name,
       'role': c.role, 'rank': c.rank, 'tel': c.tel,
       'memo': c.memo, 'availability': c.availability,
+      'photoBase64': c.photoBase64,
     }).toList()));
     prefs.setString('crew', jsonEncode(_crew.map((c) => {
       'id': c.id, 'projectId': c.projectId, 'name': c.name,
       'company': c.company, 'role': c.role, 'tel': c.tel,
-      'ngDates': c.ngDates,
+      'ngDates': c.ngDates, 'dept': c.dept, 'deptColor': c.deptColor,
     }).toList()));
     prefs.setString('rundown', jsonEncode(_rundown.map((r) => {
       'id': r.id, 'projectId': r.projectId, 'kind': r.kind,
@@ -244,13 +273,55 @@ class ProjectProvider extends ChangeNotifier {
     prefs.setString('equipment', jsonEncode(_equipment.map((e) => {
       'id': e.id, 'projectId': e.projectId,
       'category': e.category, 'name': e.name,
-      'qty': e.qty, 'owner': e.owner,
-      'memo': e.memo, 'isDone': e.isDone,
+      'qty': e.qty, 'owner': e.owner, 'memo': e.memo, 'isDone': e.isDone,
+      'loanFrom': e.loanFrom, 'loanDate': e.loanDate,
+      'returnDate': e.returnDate, 'isReturned': e.isReturned,
     }).toList()));
     prefs.setString('budget', jsonEncode(_budget.map((b) => {
       'id': b.id, 'projectId': b.projectId,
       'category': b.category, 'name': b.name,
       'budget': b.budget, 'actual': b.actual, 'memo': b.memo,
+    }).toList()));
+    prefs.setString('liveActs', jsonEncode(_liveActs.map((a) => {
+      'id': a.id, 'projectId': a.projectId, 'actNo': a.actNo,
+      'artist': a.artist, 'actType': a.actType, 'minutes': a.minutes,
+      'changeMinutes': a.changeMinutes, 'setlist': a.setlist,
+      'paMemo': a.paMemo, 'lightMemo': a.lightMemo,
+      'memo': a.memo, 'sortKey': a.sortKey,
+    }).toList()));
+    prefs.setString('eventCorners', jsonEncode(_eventCorners.map((c) => {
+      'id': c.id, 'projectId': c.projectId, 'time': c.time,
+      'minutes': c.minutes, 'name': c.name, 'presenter': c.presenter,
+      'cue': c.cue, 'owner': c.owner, 'memo': c.memo, 'sortKey': c.sortKey,
+    }).toList()));
+    prefs.setString('conferenceSessions', jsonEncode(_conferenceSessions.map((s) => {
+      'id': s.id, 'projectId': s.projectId, 'time': s.time,
+      'minutes': s.minutes, 'sessionName': s.sessionName,
+      'speakers': s.speakers, 'hall': s.hall, 'format': s.format,
+      'hasInterpreter': s.hasInterpreter, 'hasMaterial': s.hasMaterial,
+      'memo': s.memo, 'sortKey': s.sortKey,
+    }).toList()));
+    prefs.setString('scripts', jsonEncode(_scripts.map((s) => {
+      'id': s.id, 'projectId': s.projectId, 'title': s.title,
+      'fileType': s.fileType, 'content': s.content,
+      'memo': s.memo, 'updatedAt': s.updatedAt.toIso8601String(),
+    }).toList()));
+    prefs.setString('characters', jsonEncode(_characters.map((c) => {
+      'id': c.id, 'projectId': c.projectId, 'name': c.name,
+      'castId': c.castId, 'age': c.age, 'personality': c.personality,
+      'costumeMemo': c.costumeMemo, 'makeup': c.makeup,
+      'notes': c.notes, 'sceneNos': c.sceneNos,
+    }).toList()));
+    prefs.setString('transports', jsonEncode(_transports.map((t) => {
+      'id': t.id, 'projectId': t.projectId, 'personName': t.personName,
+      'personType': t.personType, 'date': t.date,
+      'from': t.from, 'to': t.to, 'method': t.method,
+      'amount': t.amount, 'isPaid': t.isPaid, 'memo': t.memo,
+    }).toList()));
+    prefs.setString('productions', jsonEncode(_productions.map((p) => {
+      'id': p.id, 'projectId': p.projectId, 'category': p.category,
+      'name': p.name, 'owner': p.owner, 'deadline': p.deadline,
+      'status': p.status, 'memo': p.memo, 'sortKey': p.sortKey,
     }).toList()));
     prefs.setString('gantt', jsonEncode(_gantt.map((g) => {
       'id': g.id, 'projectId': g.projectId,
@@ -270,6 +341,7 @@ class ProjectProvider extends ChangeNotifier {
         typeKey: e['typeKey'], venue: e['venue'] ?? '',
         formatType: e['formatType'] ?? '', memo: e['memo'] ?? '',
         extraInfo: Map<String, String>.from(e['extraInfo'] ?? {}),
+        eventDate: e['eventDate'] != null ? DateTime.parse(e['eventDate']) : null,
         createdAt: DateTime.parse(e['createdAt']),
         updatedAt: DateTime.parse(e['updatedAt']),
       )).toList();
@@ -281,6 +353,7 @@ class ProjectProvider extends ChangeNotifier {
         role: e['role'], rank: e['rank'], tel: e['tel'],
         memo: e['memo'],
         availability: Map<String, String>.from(e['availability'] ?? {}),
+        photoBase64: e['photoBase64'],
       )).toList();
     }
     final cr = prefs.getString('crew');
@@ -289,6 +362,7 @@ class ProjectProvider extends ChangeNotifier {
         id: e['id'], projectId: e['projectId'], name: e['name'],
         company: e['company'], role: e['role'], tel: e['tel'],
         ngDates: e['ngDates'] ?? '',
+        dept: e['dept'] ?? '', deptColor: e['deptColor'] ?? '#6FBA2C',
       )).toList();
     }
     final rd = prefs.getString('rundown');
@@ -344,6 +418,8 @@ class ProjectProvider extends ChangeNotifier {
         name: e['name'] ?? '', qty: e['qty'] ?? 1,
         owner: e['owner'] ?? '', memo: e['memo'] ?? '',
         isDone: e['isDone'] ?? false,
+        loanFrom: e['loanFrom'] ?? '', loanDate: e['loanDate'] ?? '',
+        returnDate: e['returnDate'] ?? '', isReturned: e['isReturned'] ?? false,
       )).toList();
     }
     final bu = prefs.getString('budget');
@@ -353,6 +429,77 @@ class ProjectProvider extends ChangeNotifier {
         category: e['category'] ?? 'その他',
         name: e['name'] ?? '', budget: e['budget'] ?? 0,
         actual: e['actual'] ?? 0, memo: e['memo'] ?? '',
+      )).toList();
+    }
+    final la = prefs.getString('liveActs');
+    if (la != null) {
+      _liveActs = (jsonDecode(la) as List).map((e) => LiveAct(
+        id: e['id'], projectId: e['projectId'], actNo: e['actNo'] ?? '',
+        artist: e['artist'] ?? '', actType: e['actType'] ?? '本番',
+        minutes: e['minutes'] ?? 0, changeMinutes: e['changeMinutes'] ?? 0,
+        setlist: e['setlist'] ?? '', paMemo: e['paMemo'] ?? '',
+        lightMemo: e['lightMemo'] ?? '', memo: e['memo'] ?? '',
+        sortKey: e['sortKey'] ?? 0,
+      )).toList();
+    }
+    final ec = prefs.getString('eventCorners');
+    if (ec != null) {
+      _eventCorners = (jsonDecode(ec) as List).map((e) => EventCorner(
+        id: e['id'], projectId: e['projectId'], time: e['time'] ?? '',
+        minutes: e['minutes'] ?? 0, name: e['name'] ?? '',
+        presenter: e['presenter'] ?? '', cue: e['cue'] ?? '',
+        owner: e['owner'] ?? '', memo: e['memo'] ?? '',
+        sortKey: e['sortKey'] ?? 0,
+      )).toList();
+    }
+    final confData = prefs.getString('conferenceSessions');
+    if (confData != null) {
+      _conferenceSessions = (jsonDecode(confData) as List).map((e) => ConferenceSession(
+        id: e['id'], projectId: e['projectId'], time: e['time'] ?? '',
+        minutes: e['minutes'] ?? 0, sessionName: e['sessionName'] ?? '',
+        speakers: e['speakers'] ?? '', hall: e['hall'] ?? '',
+        format: e['format'] ?? '講演',
+        hasInterpreter: e['hasInterpreter'] ?? false,
+        hasMaterial: e['hasMaterial'] ?? false,
+        memo: e['memo'] ?? '', sortKey: e['sortKey'] ?? 0,
+      )).toList();
+    }
+    final scrData = prefs.getString('scripts');
+    if (scrData != null) {
+      _scripts = (jsonDecode(scrData) as List).map((e) => ScriptFile(
+        id: e['id'], projectId: e['projectId'], title: e['title'] ?? '',
+        fileType: e['fileType'] ?? 'text', content: e['content'] ?? '',
+        memo: e['memo'] ?? '',
+        updatedAt: DateTime.parse(e['updatedAt']),
+      )).toList();
+    }
+    final ch = prefs.getString('characters');
+    if (ch != null) {
+      _characters = (jsonDecode(ch) as List).map((e) => CharacterDetail(
+        id: e['id'], projectId: e['projectId'], name: e['name'] ?? '',
+        castId: e['castId'] ?? '', age: e['age'] ?? '',
+        personality: e['personality'] ?? '', costumeMemo: e['costumeMemo'] ?? '',
+        makeup: e['makeup'] ?? '', notes: e['notes'] ?? '',
+        sceneNos: e['sceneNos'] ?? '',
+      )).toList();
+    }
+    final tr = prefs.getString('transports');
+    if (tr != null) {
+      _transports = (jsonDecode(tr) as List).map((e) => TransportCost(
+        id: e['id'], projectId: e['projectId'],
+        personName: e['personName'] ?? '', personType: e['personType'] ?? 'cast',
+        date: e['date'] ?? '', from: e['from'] ?? '', to: e['to'] ?? '',
+        method: e['method'] ?? '', amount: e['amount'] ?? 0,
+        isPaid: e['isPaid'] ?? false, memo: e['memo'] ?? '',
+      )).toList();
+    }
+    final pr = prefs.getString('productions');
+    if (pr != null) {
+      _productions = (jsonDecode(pr) as List).map((e) => ProductionItem(
+        id: e['id'], projectId: e['projectId'], category: e['category'] ?? 'その他',
+        name: e['name'] ?? '', owner: e['owner'] ?? '', deadline: e['deadline'] ?? '',
+        status: e['status'] ?? 'notStarted', memo: e['memo'] ?? '',
+        sortKey: e['sortKey'] ?? 0,
       )).toList();
     }
     final ga = prefs.getString('gantt');
@@ -409,6 +556,7 @@ class ProjectProvider extends ChangeNotifier {
       'type_key': project.typeKey, 'venue': project.venue,
       'format_type': project.formatType, 'memo': project.memo,
       'extra_info': project.extraInfo,
+      'event_date': project.eventDate?.toIso8601String(),
       'created_at': project.createdAt.toIso8601String(),
       'updated_at': project.updatedAt.toIso8601String(),
     });
@@ -432,6 +580,7 @@ class ProjectProvider extends ChangeNotifier {
       'type_key': project.typeKey, 'venue': project.venue,
       'format_type': project.formatType, 'memo': project.memo,
       'extra_info': project.extraInfo,
+      'event_date': project.eventDate?.toIso8601String(),
       'updated_at': project.updatedAt.toIso8601String(),
     });
   }
@@ -447,6 +596,13 @@ class ProjectProvider extends ChangeNotifier {
     _equipment.removeWhere((e) => e.projectId == id);
     _budget.removeWhere((b) => b.projectId == id);
     _gantt.removeWhere((g) => g.projectId == id);
+    _liveActs.removeWhere((a) => a.projectId == id);
+    _eventCorners.removeWhere((c) => c.projectId == id);
+    _conferenceSessions.removeWhere((s) => s.projectId == id);
+    _scripts.removeWhere((s) => s.projectId == id);
+    _characters.removeWhere((c) => c.projectId == id);
+    _transports.removeWhere((t) => t.projectId == id);
+    _productions.removeWhere((p) => p.projectId == id);
     if (_currentProject?.id == id) {
       _currentProject = _projects.isNotEmpty ? _projects.first : null;
     }
@@ -461,6 +617,7 @@ class ProjectProvider extends ChangeNotifier {
       'id': m.id, 'project_id': m.projectId, 'name': m.name,
       'role': m.role, 'rank': m.rank, 'tel': m.tel,
       'memo': m.memo, 'availability': m.availability,
+      'photo_base64': m.photoBase64,
     });
   }
   Future<void> updateCastMember(CastMember m) async {
@@ -470,6 +627,7 @@ class ProjectProvider extends ChangeNotifier {
       'id': m.id, 'project_id': m.projectId, 'name': m.name,
       'role': m.role, 'rank': m.rank, 'tel': m.tel,
       'memo': m.memo, 'availability': m.availability,
+      'photo_base64': m.photoBase64,
     });
   }
   Future<void> deleteCastMember(String id) async {
@@ -496,7 +654,7 @@ class ProjectProvider extends ChangeNotifier {
     await _upsertToSb('crew_members', {
       'id': m.id, 'project_id': m.projectId, 'name': m.name,
       'company': m.company, 'role': m.role, 'tel': m.tel,
-      'ng_dates': m.ngDates,
+      'ng_dates': m.ngDates, 'dept': m.dept, 'dept_color': m.deptColor,
     });
   }
   Future<void> updateCrewMember(CrewMember m) async {
@@ -505,7 +663,7 @@ class ProjectProvider extends ChangeNotifier {
     await _upsertToSb('crew_members', {
       'id': m.id, 'project_id': m.projectId, 'name': m.name,
       'company': m.company, 'role': m.role, 'tel': m.tel,
-      'ng_dates': m.ngDates,
+      'ng_dates': m.ngDates, 'dept': m.dept, 'dept_color': m.deptColor,
     });
   }
   Future<void> deleteCrewMember(String id) async {
@@ -658,8 +816,9 @@ class ProjectProvider extends ChangeNotifier {
     await _upsertToSb('equipment_items', {
       'id': e.id, 'project_id': e.projectId,
       'category': e.category, 'name': e.name,
-      'qty': e.qty, 'owner': e.owner,
-      'memo': e.memo, 'is_done': e.isDone,
+      'qty': e.qty, 'owner': e.owner, 'memo': e.memo, 'is_done': e.isDone,
+      'loan_from': e.loanFrom, 'loan_date': e.loanDate,
+      'return_date': e.returnDate, 'is_returned': e.isReturned,
     });
   }
   Future<void> updateEquipment(EquipmentItem e) async {
@@ -668,8 +827,9 @@ class ProjectProvider extends ChangeNotifier {
     await _upsertToSb('equipment_items', {
       'id': e.id, 'project_id': e.projectId,
       'category': e.category, 'name': e.name,
-      'qty': e.qty, 'owner': e.owner,
-      'memo': e.memo, 'is_done': e.isDone,
+      'qty': e.qty, 'owner': e.owner, 'memo': e.memo, 'is_done': e.isDone,
+      'loan_from': e.loanFrom, 'loan_date': e.loanDate,
+      'return_date': e.returnDate, 'is_returned': e.isReturned,
     });
   }
   Future<void> deleteEquipment(String id) async {
@@ -725,6 +885,112 @@ class ProjectProvider extends ChangeNotifier {
   Future<void> deleteGanttTask(String id) async {
     _gantt.removeWhere((g) => g.id == id);
     await _save(); await _deleteFromSb('gantt_tasks', id);
+  }
+
+  // ===== ライブ出番操作 =====
+  Future<void> addLiveAct(LiveAct a) async {
+    a.sortKey = _liveActs.where((x) => x.projectId == a.projectId).length;
+    _liveActs.add(a); await _save(); notifyListeners();
+  }
+  Future<void> updateLiveAct(LiveAct a) async {
+    final i = _liveActs.indexWhere((x) => x.id == a.id);
+    if (i >= 0) _liveActs[i] = a; await _save(); notifyListeners();
+  }
+  Future<void> deleteLiveAct(String id) async {
+    _liveActs.removeWhere((a) => a.id == id);
+    await _save(); notifyListeners();
+  }
+  Future<void> reorderLiveActs(int oldIndex, int newIndex) async {
+    final items = liveActs;
+    if (newIndex > oldIndex) newIndex--;
+    final item = items.removeAt(oldIndex);
+    items.insert(newIndex, item);
+    for (var i = 0; i < items.length; i++) {
+      final idx = _liveActs.indexWhere((a) => a.id == items[i].id);
+      if (idx >= 0) _liveActs[idx].sortKey = i;
+    }
+    await _save(); notifyListeners();
+  }
+
+  // ===== イベントコーナー操作 =====
+  Future<void> addEventCorner(EventCorner c) async {
+    c.sortKey = _eventCorners.where((x) => x.projectId == c.projectId).length;
+    _eventCorners.add(c); await _save(); notifyListeners();
+  }
+  Future<void> updateEventCorner(EventCorner c) async {
+    final i = _eventCorners.indexWhere((x) => x.id == c.id);
+    if (i >= 0) _eventCorners[i] = c; await _save(); notifyListeners();
+  }
+  Future<void> deleteEventCorner(String id) async {
+    _eventCorners.removeWhere((c) => c.id == id);
+    await _save(); notifyListeners();
+  }
+
+  // ===== カンファレンスセッション操作 =====
+  Future<void> addConferenceSession(ConferenceSession s) async {
+    s.sortKey = _conferenceSessions.where((x) => x.projectId == s.projectId).length;
+    _conferenceSessions.add(s); await _save(); notifyListeners();
+  }
+  Future<void> updateConferenceSession(ConferenceSession s) async {
+    final i = _conferenceSessions.indexWhere((x) => x.id == s.id);
+    if (i >= 0) _conferenceSessions[i] = s; await _save(); notifyListeners();
+  }
+  Future<void> deleteConferenceSession(String id) async {
+    _conferenceSessions.removeWhere((s) => s.id == id);
+    await _save(); notifyListeners();
+  }
+
+  // ===== 脚本・台本操作 =====
+  Future<void> addScript(ScriptFile s) async {
+    _scripts.add(s); await _save(); notifyListeners();
+  }
+  Future<void> updateScript(ScriptFile s) async {
+    final i = _scripts.indexWhere((x) => x.id == s.id);
+    if (i >= 0) _scripts[i] = s; await _save(); notifyListeners();
+  }
+  Future<void> deleteScript(String id) async {
+    _scripts.removeWhere((s) => s.id == id);
+    await _save(); notifyListeners();
+  }
+
+  // ===== 役の詳細操作 =====
+  Future<void> addCharacter(CharacterDetail c) async {
+    _characters.add(c); await _save(); notifyListeners();
+  }
+  Future<void> updateCharacter(CharacterDetail c) async {
+    final i = _characters.indexWhere((x) => x.id == c.id);
+    if (i >= 0) _characters[i] = c; await _save(); notifyListeners();
+  }
+  Future<void> deleteCharacter(String id) async {
+    _characters.removeWhere((c) => c.id == id);
+    await _save(); notifyListeners();
+  }
+
+  // ===== 交通費操作 =====
+  Future<void> addTransport(TransportCost t) async {
+    _transports.add(t); await _save(); notifyListeners();
+  }
+  Future<void> updateTransport(TransportCost t) async {
+    final i = _transports.indexWhere((x) => x.id == t.id);
+    if (i >= 0) _transports[i] = t; await _save(); notifyListeners();
+  }
+  Future<void> deleteTransport(String id) async {
+    _transports.removeWhere((t) => t.id == id);
+    await _save(); notifyListeners();
+  }
+
+  // ===== 制作物操作 =====
+  Future<void> addProduction(ProductionItem p) async {
+    p.sortKey = _productions.where((x) => x.projectId == p.projectId).length;
+    _productions.add(p); await _save(); notifyListeners();
+  }
+  Future<void> updateProduction(ProductionItem p) async {
+    final i = _productions.indexWhere((x) => x.id == p.id);
+    if (i >= 0) _productions[i] = p; await _save(); notifyListeners();
+  }
+  Future<void> deleteProduction(String id) async {
+    _productions.removeWhere((p) => p.id == id);
+    await _save(); notifyListeners();
   }
 
   // ===== 時刻計算 =====

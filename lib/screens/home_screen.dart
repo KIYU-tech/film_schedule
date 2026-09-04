@@ -126,10 +126,33 @@ class _ProjectTile extends StatelessWidget {
     }
   }
 
+  void _confirmDelete(BuildContext ctx) {
+    final title = project.title.isEmpty ? '（タイトル未設定）' : project.title;
+    showDialog(
+      context: ctx,
+      builder: (_) => AlertDialog(
+        title: const Text('プロジェクトを削除'),
+        content: Text('「$title」を削除しますか？\nこの操作は取り消せません。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('キャンセル')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ctx.read<ProjectProvider>().deleteProject(project.id);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('削除')),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final title = project.title.isEmpty ? '（タイトル未設定）' : project.title;
+    
     return Card(
       child: InkWell(
         onTap: () async {
@@ -157,7 +180,7 @@ class _ProjectTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      project.title.isEmpty ? '（タイトル未設定）' : project.title,
+                      title,
                       style: tt.titleMedium?.copyWith(
                         color: project.title.isEmpty
                             ? cs.onSurfaceVariant : cs.onSurface),
@@ -176,7 +199,12 @@ class _ProjectTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+              // 削除ボタン
+              IconButton(
+                icon: Icon(Icons.delete_outline, color: cs.error),
+                tooltip: '削除',
+                onPressed: () => _confirmDelete(context),
+              ),
             ],
           ),
         ),

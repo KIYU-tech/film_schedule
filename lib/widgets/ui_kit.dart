@@ -230,3 +230,73 @@ class SelectButton extends StatelessWidget {
     );
   }
 }
+
+
+// ===== スマホ向け 横スクロール可能なボトムナビ =====
+// 通常のNavigationBarはタブ数が多いと窮屈で押しにくいため、
+// 画面が狭い時はこちらの横スクロール版に切り替える
+class ScrollableBottomNav extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+  final List<({IconData icon, String label})> items;
+  const ScrollableBottomNav({
+    super.key,
+    required this.selectedIndex,
+    required this.onSelected,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 72,
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(top: BorderSide(color: cs.outline)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          itemCount: items.length,
+          itemBuilder: (_, i) {
+            final selected = i == selectedIndex;
+            final item = items[i];
+            return GestureDetector(
+              onTap: () => onSelected(i),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                width: 76,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: selected ? glightGreen.withOpacity(0.16) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      // アイコンを一回り大きくして押しやすく
+                      child: Icon(item.icon, size: 26,
+                        color: selected ? glightGreen : cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(item.label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                        color: selected ? glightGreen : cs.onSurfaceVariant),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}

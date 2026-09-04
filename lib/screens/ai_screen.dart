@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
@@ -41,10 +44,58 @@ class _AiScreenState extends State<AiScreen> {
   ];
 
   @override
-  void initState() { super.initState(); _loadApiKey(); }
+  void initState() {
+    super.initState();
+    _loadApiKey();
+    // Web環境でのファイルドロップイベントを監視
+    if (kIsWeb) {
+      html.window.addEventListener('fileDropped', _onFileDrop);
+    }
+  }
+
+  void _onFileDrop(html.Event e) {
+    final customEvent = e as html.CustomEvent;
+    final detail = customEvent.detail as Map;
+    final name = detail['name'] as String? ?? '';
+    final type = detail['type'] as String? ?? '';
+    final data = html.window.localStorage['dropped_file_data'] ?? '';
+    final ready = html.window.localStorage['dropped_file_ready'] ?? '';
+    if (ready != 'true' || data.isEmpty) return;
+
+    // 読み取り後はクリア
+    html.window.localStorage.remove('dropped_file_ready');
+
+    if (type == 'pdf') {
+      try {
+        final bytes = base64Decode(data);
+        setState(() {
+          _pdfBytes = bytes;
+          _fileName = name;
+          _textCtrl.text = '';
+        });
+        _showSnack('$name を読み込みました（PDF）');
+      } catch (e) {
+        _showSnack('PDFの読み込みに失敗しました');
+      }
+    } else {
+      setState(() {
+        _pdfBytes = null;
+        _fileName = name;
+        _textCtrl.text = data;
+      });
+      _showSnack('$name を読み込みました');
+    }
+  }
 
   @override
-  void dispose() { _textCtrl.dispose(); _apiKeyCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    if (kIsWeb) {
+      html.window.removeEventListener('fileDropped', _onFileDrop);
+    }
+    _textCtrl.dispose();
+    _apiKeyCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _loadApiKey() async {
     final prefs = await SharedPreferences.getInstance();
@@ -138,7 +189,7 @@ class _AiScreenState extends State<AiScreen> {
 
       final url = Uri.parse(
         'https://generativelanguage.googleapis.com/v1beta/models/'
-        'gemini-1.5-flash:generateContent?key=$apiKey');
+        'gemini-3.6-flash:generateContent?key=$apiKey');
 
       final response = await http.post(url,
         headers: {'Content-Type': 'application/json'},
@@ -394,6 +445,40 @@ class _AiScreenState extends State<AiScreen> {
                     icon: const Icon(Icons.upload_file_outlined, size: 16),
                     label: const Text('ファイルを開く')),
                 ]),
+                const SizedBox(height: 12),
+                // ドロップゾーン（ファイルをここにドラッグ）
+                GestureDetector(
+                  onTap: _pickFile,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    decoration: BoxDecoration(
+                      color: glightGreen.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: glightGreen.withOpacity(0.3),
+                        width: 1.5,
+                        style: BorderStyle.solid,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.cloud_upload_outlined,
+                          size: 36, color: glightGreen.withOpacity(0.6)),
+                        const SizedBox(height: 8),
+                        Text('ここにファイルをドラッグ、またはタップして選択',
+                          style: TextStyle(fontSize: 13,
+                            color: cs.onSurfaceVariant),
+                          textAlign: TextAlign.center),
+                        const SizedBox(height: 4),
+                        Text('PDF / TXT / MD / STRY 対応',
+                          style: TextStyle(fontSize: 11,
+                            color: cs.onSurfaceVariant.withOpacity(0.6))),
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 12),
 
                 // 読み込んだファイル表示
