@@ -132,7 +132,7 @@ class _AiScreenState extends State<AiScreen> {
 
       final url = Uri.parse(
         'https://generativelanguage.googleapis.com/v1beta/models/'
-        'gemini-2.0-flash:generateContent?key=$apiKey');
+        'gemini-3.6-flash:generateContent?key=$apiKey');
 
       final response = await http.post(url,
         headers: {'Content-Type': 'application/json'},
