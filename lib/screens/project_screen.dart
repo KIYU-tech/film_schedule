@@ -35,13 +35,20 @@ class ProjectScreen extends StatefulWidget {
 
 class _ProjectScreenState extends State<ProjectScreen> {
   int _index = 0;
-  late List<_Tab> _tabs;
-  late List<String> _tabOrder;
+  // late をやめて空リストで初期化 → クラッシュしなくなる
+  List<_Tab> _tabs = [];
+  List<String> _tabIds = [];
+  bool _loaded = false;
 
   @override
-  void initState() {
-    super.initState();
-    _loadTabOrder();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // initState ではなく didChangeDependencies で呼ぶ
+    // → context が使える & Provider にもアクセスできる
+    if (!_loaded) {
+      _loaded = true;
+      _loadTabOrder();
+    }
   }
 
   Future<void> _loadTabOrder() async {
@@ -49,48 +56,39 @@ class _ProjectScreenState extends State<ProjectScreen> {
     final project = provider.currentProject;
     if (project == null) return;
 
+    final allTabs = _buildTabs(project.type);
     final prefs = await SharedPreferences.getInstance();
     final key = 'tab_order_${project.id}_${project.type.name}';
     final saved = prefs.getStringList(key);
 
-    _tabs = _buildTabs(project.type);
-    
+    List<_Tab> ordered;
     if (saved != null && saved.isNotEmpty) {
-      _tabOrder = saved;
-      // タブを保存された順序でソート
-      _tabs.sort((a, b) => _tabOrder.indexOf(a.id).compareTo(_tabOrder.indexOf(b.id)));
+      // 保存順にソート。知らないIDは末尾に
+      ordered = [
+        ...saved
+            .map((id) => allTabs.where((t) => t.id == id).firstOrNull)
+            .whereType<_Tab>(),
+        ...allTabs.where((t) => !saved.contains(t.id)),
+      ];
     } else {
-      _tabOrder = _tabs.map((t) => t.id).toList();
+      ordered = allTabs;
     }
 
-    setState(() {});
+    if (mounted) {
+      setState(() {
+        _tabs = ordered;
+        _tabIds = ordered.map((t) => t.id).toList();
+      });
+    }
   }
 
   Future<void> _saveTabOrder() async {
     final provider = context.read<ProjectProvider>();
     final project = provider.currentProject;
     if (project == null) return;
-
     final prefs = await SharedPreferences.getInstance();
     final key = 'tab_order_${project.id}_${project.type.name}';
-    _tabOrder = _tabs.map((t) => t.id).toList();
-    await prefs.setStringList(key, _tabOrder);
-  }
-
-  void _moveTab(int from, int to) {
-    setState(() {
-      if (to < 0 || to >= _tabs.length) return;
-      final tab = _tabs.removeAt(from);
-      _tabs.insert(to, tab);
-      if (_index == from) {
-        _index = to;
-      } else if (from < _index && _index <= to) {
-        _index--;
-      } else if (to <= _index && _index < from) {
-        _index++;
-      }
-    });
-    _saveTabOrder();
+    await prefs.setStringList(key, _tabs.map((t) => t.id).toList());
   }
 
   @override
@@ -98,11 +96,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
     final provider = context.watch<ProjectProvider>();
     final themeProvider = context.watch<ThemeProvider>();
     final project = provider.currentProject;
-    if (project == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
 
-    if (_tabs.isEmpty) {
+    if (project == null || _tabs.isEmpty) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
@@ -169,7 +164,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
   }
 
   List<_Tab> _buildTabs(ProjectType type) {
-    // 全種別共通（前半）
     final tabs = <_Tab>[
       _Tab(id: 'setup', label: '概要', icon: Icons.home_outlined,
         screen: const SetupScreen()),
@@ -180,9 +174,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
     ];
 
     switch (type) {
-      // -----------------------------------------------
       case ProjectType.film:
-      // 映画：シーン香盤・脚本・役設定・ロケ地・進行・機材・交通費・制作物
         tabs.addAll([
           _Tab(id: 'scenes', label: '香盤表',
             icon: Icons.grid_view_outlined, screen: const SceneScreen()),
@@ -203,9 +195,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
         ]);
         break;
 
-      // -----------------------------------------------
       case ProjectType.video:
-      // 動画：シーン香盤・台本・ロケ地・機材・交通費・制作物（進行表なし）
         tabs.addAll([
           _Tab(id: 'scenes', label: '香盤表',
             icon: Icons.grid_view_outlined, screen: const SceneScreen()),
@@ -222,9 +212,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
         ]);
         break;
 
-      // -----------------------------------------------
       case ProjectType.broadcast:
-      // 配信番組：配信向け香盤・進行表・配信設定（機材含む）・交通費・制作物
         tabs.addAll([
           _Tab(id: 'segments', label: '香盤表',
             icon: Icons.view_list_outlined, screen: const SegmentScreen()),
@@ -240,9 +228,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
         ]);
         break;
 
-      // -----------------------------------------------
       case ProjectType.live:
-      // ライブ：出番表（アクト型）・進行表・会場・機材・交通費・制作物
         tabs.addAll([
           _Tab(id: 'liveActs', label: '出番表',
             icon: Icons.music_note_outlined, screen: const LiveActScreen()),
@@ -261,9 +247,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
         ]);
         break;
 
-      // -----------------------------------------------
       case ProjectType.event:
-      // イベント：コーナー表・香盤表・進行表・会場・機材・交通費・制作物
         tabs.addAll([
           _Tab(id: 'corners', label: 'コーナー表',
             icon: Icons.event_note_outlined, screen: const EventCornerScreen()),
@@ -282,9 +266,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
         ]);
         break;
 
-      // -----------------------------------------------
       case ProjectType.conference:
-      // カンファレンス：セッション表・香盤表・進行表・会場・機材・交通費・制作物
         tabs.addAll([
           _Tab(id: 'sessions', label: 'セッション',
             icon: Icons.groups_outlined, screen: const ConferenceSessionScreen()),
@@ -304,7 +286,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
         break;
     }
 
-    // 全種別共通（後半）
     tabs.addAll([
       _Tab(id: 'gantt', label: 'ガント',
         icon: Icons.view_timeline_outlined, screen: const GanttScreen()),

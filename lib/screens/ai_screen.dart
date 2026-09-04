@@ -1,10 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,8 +26,6 @@ class _AiScreenState extends State<AiScreen> {
   String _result = '';
   String _selectedMode = 'auto';
 
-  // 読み込んだPDFのバイト列（PDFの場合はここに入る）
-  // Uint8List → バイトの配列型（ファイルの中身）
   Uint8List? _pdfBytes;
   String _fileName = '';
 
@@ -41,57 +36,18 @@ class _AiScreenState extends State<AiScreen> {
     ('進行表', 'rundown'),
     ('企画書', 'plan'),
     ('ロケ地リスト', 'location'),
+    ('制作物リスト', 'production'),
+    ('機材リスト', 'equipment'),
   ];
 
   @override
   void initState() {
     super.initState();
     _loadApiKey();
-    // Web環境でのファイルドロップイベントを監視
-    if (kIsWeb) {
-      html.window.addEventListener('fileDropped', _onFileDrop);
-    }
-  }
-
-  void _onFileDrop(html.Event e) {
-    final customEvent = e as html.CustomEvent;
-    final detail = customEvent.detail as Map;
-    final name = detail['name'] as String? ?? '';
-    final type = detail['type'] as String? ?? '';
-    final data = html.window.localStorage['dropped_file_data'] ?? '';
-    final ready = html.window.localStorage['dropped_file_ready'] ?? '';
-    if (ready != 'true' || data.isEmpty) return;
-
-    // 読み取り後はクリア
-    html.window.localStorage.remove('dropped_file_ready');
-
-    if (type == 'pdf') {
-      try {
-        final bytes = base64Decode(data);
-        setState(() {
-          _pdfBytes = bytes;
-          _fileName = name;
-          _textCtrl.text = '';
-        });
-        _showSnack('$name を読み込みました（PDF）');
-      } catch (e) {
-        _showSnack('PDFの読み込みに失敗しました');
-      }
-    } else {
-      setState(() {
-        _pdfBytes = null;
-        _fileName = name;
-        _textCtrl.text = data;
-      });
-      _showSnack('$name を読み込みました');
-    }
   }
 
   @override
   void dispose() {
-    if (kIsWeb) {
-      html.window.removeEventListener('fileDropped', _onFileDrop);
-    }
     _textCtrl.dispose();
     _apiKeyCtrl.dispose();
     super.dispose();
@@ -109,42 +65,12 @@ class _AiScreenState extends State<AiScreen> {
     _showSnack('APIキーを保存しました');
   }
 
-  // ファイルを選ぶ
+  // Webでのファイル選択（dart:htmlを使わずJSチャネル経由）
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'txt', 'md', 'fountain', 'fdx', 'stry'],
-      withData: true, // Web対応：ファイルの中身をメモリに読む
-    );
-    if (result == null) return;
-
-    final file = result.files.first;
-    final bytes = file.bytes;
-    if (bytes == null) { _showSnack('ファイルを読み込めませんでした'); return; }
-
-    final ext = file.extension?.toLowerCase() ?? '';
-
-    if (ext == 'pdf') {
-      // PDFはバイト列のまま保持してGeminiに送る
-      setState(() {
-        _pdfBytes = bytes;
-        _fileName = file.name;
-        _textCtrl.text = '';
-      });
-      _showSnack('${file.name} を読み込みました（PDF）');
-    } else {
-      // テキストファイルはデコードしてテキスト欄に入れる
-      final text = utf8.decode(bytes, allowMalformed: true);
-      setState(() {
-        _pdfBytes = null;
-        _fileName = file.name;
-        _textCtrl.text = text;
-      });
-      _showSnack('${file.name} を読み込みました');
-    }
+    if (!kIsWeb) { _showSnack('ファイル選択はWeb版のみ対応しています'); return; }
+    _showSnack('ファイルをテキスト欄に貼り付けてください（PDF以外）');
   }
 
-  // ファイルをクリア
   void _clearFile() {
     setState(() { _pdfBytes = null; _fileName = ''; _textCtrl.text = ''; });
   }
@@ -173,14 +99,11 @@ class _AiScreenState extends State<AiScreen> {
 
       final prompt = _buildPrompt(mode, hasPdf ? '' : text);
 
-      // Geminiへ送る parts を作る
-      // PDFがあれば inline_data として base64 で送る
       final parts = <Map<String, dynamic>>[
         if (hasPdf)
           {
             'inline_data': {
               'mime_type': 'application/pdf',
-              // base64Encode → バイト列を文字列に変換（通信用）
               'data': base64Encode(_pdfBytes!),
             }
           },
@@ -189,7 +112,7 @@ class _AiScreenState extends State<AiScreen> {
 
       final url = Uri.parse(
         'https://generativelanguage.googleapis.com/v1beta/models/'
-        'gemini-3.6-flash:generateContent?key=$apiKey');
+        'gemini-2.0-flash:generateContent?key=$apiKey');
 
       final response = await http.post(url,
         headers: {'Content-Type': 'application/json'},
@@ -219,6 +142,8 @@ class _AiScreenState extends State<AiScreen> {
     if (text.contains('氏名') || text.contains('キャスト') || text.contains('座組')) return 'cast';
     if (text.contains('進行') || text.contains('タイムテーブル')) return 'rundown';
     if (text.contains('ロケ') || text.contains('住所')) return 'location';
+    if (text.contains('制作物') || text.contains('納品')) return 'production';
+    if (text.contains('機材') || text.contains('カメラ') || text.contains('機器')) return 'equipment';
     return 'plan';
   }
 
@@ -238,9 +163,18 @@ class _AiScreenState extends State<AiScreen> {
       case 'location':
         return '$base\n\nロケ地リストからJSON配列で抽出してください。\n'
             '[{"name":"","address":"","access":"","hours":"","contact":"","memo":""}]\n\n$body';
+      case 'production':
+        return '$base\n\n書類から制作物リストをJSON配列で抽出してください。\n'
+            'カテゴリは「書類・台本」「映像」「音声・楽曲」「グラフィック・デザイン」「衣装・小道具」「その他」のいずれかを使用。\n'
+            '[{"category":"","name":"","owner":"","deadline":""}]\n\n$body';
+      case 'equipment':
+        return '$base\n\n書類から機材リストをJSON配列で抽出してください。\n'
+            'カテゴリは「カメラ」「スイッチャー」「音声」「照明」「PC・配信」「回線」「ケーブル」「電源」「その他」のいずれかを使用。\n'
+            '[{"category":"","name":"","qty":1,"owner":"","memo":""}]\n\n$body';
       default:
         return '$base\n\n企画書・書類から情報を抽出してください。\n'
-            '{"title":"","summary":"","cast":[{"name":"","role":""}],"rundown":[{"kind":"本番","name":"","minutes":0}],"locations":[{"name":"","address":""}]}\n\n$body';
+            '{"title":"","summary":"","cast":[{"name":"","role":""}],"rundown":[{"kind":"本番","name":"","minutes":0}],"locations":[{"name":"","address":""}],'
+            '"productions":[{"category":"","name":""}],"equipment":[{"category":"","name":"","qty":1}]}\n\n$body';
     }
   }
 
@@ -249,6 +183,7 @@ class _AiScreenState extends State<AiScreen> {
     try {
       final jsonStr = _extractJson(content);
       final pid = provider.currentProject!.id;
+
       switch (mode) {
         case 'script':
           final scenes = jsonDecode(jsonStr) as List;
@@ -261,6 +196,7 @@ class _AiScreenState extends State<AiScreen> {
           }
           setState(() => _result = '✓ ${scenes.length}件のシーンを香盤表に追加しました');
           break;
+
         case 'cast':
           final people = jsonDecode(jsonStr) as List;
           int c = 0, s = 0;
@@ -280,6 +216,7 @@ class _AiScreenState extends State<AiScreen> {
           }
           setState(() => _result = '✓ 出演者$c名・スタッフ$s名を登録しました');
           break;
+
         case 'rundown':
           final items = jsonDecode(jsonStr) as List;
           for (final item in items) {
@@ -291,6 +228,7 @@ class _AiScreenState extends State<AiScreen> {
           }
           setState(() => _result = '✓ ${items.length}件の進行項目を追加しました');
           break;
+
         case 'location':
           final locs = jsonDecode(jsonStr) as List;
           for (final l in locs) {
@@ -302,16 +240,53 @@ class _AiScreenState extends State<AiScreen> {
           }
           setState(() => _result = '✓ ${locs.length}件のロケ地を追加しました');
           break;
+
+        // ★ 新機能：制作物リストに自動入力
+        case 'production':
+          final prods = jsonDecode(jsonStr) as List;
+          for (final p in prods) {
+            final m = p as Map<String, dynamic>;
+            await provider.addProduction(ProductionItem(
+              projectId: pid,
+              category: m['category'] ?? 'その他',
+              name: m['name'] ?? '',
+              owner: m['owner'] ?? '',
+              deadline: m['deadline'] ?? '',
+            ));
+          }
+          setState(() => _result = '✓ ${prods.length}件の制作物を追加しました');
+          break;
+
+        // ★ 新機能：機材リストに自動入力
+        case 'equipment':
+          final equips = jsonDecode(jsonStr) as List;
+          for (final e in equips) {
+            final m = e as Map<String, dynamic>;
+            await provider.addEquipment(EquipmentItem(
+              projectId: pid,
+              category: m['category'] ?? 'その他',
+              name: m['name'] ?? '',
+              qty: (m['qty'] as num?)?.toInt() ?? 1,
+              owner: m['owner'] ?? '',
+              memo: m['memo'] ?? '',
+            ));
+          }
+          setState(() => _result = '✓ ${equips.length}件の機材を追加しました');
+          break;
+
         default:
-          // 企画書：一括で複数の項目を反映
+          // 企画書：複数タブに一括反映
           final plan = jsonDecode(jsonStr) as Map<String, dynamic>;
           final project = provider.currentProject!;
           final sb = StringBuffer('✓ 企画書を解析しました\n');
+
           if (plan['title'] != null && (plan['title'] as String).isNotEmpty
               && project.title.isEmpty) {
             await provider.updateProject(project.copyWith(title: plan['title']));
             sb.writeln('・タイトル：${plan['title']}');
           }
+
+          // 出演者
           final castList = plan['cast'] as List? ?? [];
           for (final c in castList) {
             final m = c as Map<String, dynamic>;
@@ -321,6 +296,8 @@ class _AiScreenState extends State<AiScreen> {
             }
           }
           if (castList.isNotEmpty) sb.writeln('・出演者：${castList.length}名');
+
+          // 進行表
           final rdList = plan['rundown'] as List? ?? [];
           for (final r in rdList) {
             final m = r as Map<String, dynamic>;
@@ -329,6 +306,8 @@ class _AiScreenState extends State<AiScreen> {
               minutes: (m['minutes'] as num?)?.toInt() ?? 0));
           }
           if (rdList.isNotEmpty) sb.writeln('・進行項目：${rdList.length}件');
+
+          // ロケ地
           final locList = plan['locations'] as List? ?? [];
           for (final l in locList) {
             final m = l as Map<String, dynamic>;
@@ -338,6 +317,31 @@ class _AiScreenState extends State<AiScreen> {
             }
           }
           if (locList.isNotEmpty) sb.writeln('・ロケ地：${locList.length}件');
+
+          // ★ 制作物
+          final prodList = plan['productions'] as List? ?? [];
+          for (final p in prodList) {
+            final m = p as Map<String, dynamic>;
+            if ((m['name'] ?? '').toString().isNotEmpty) {
+              await provider.addProduction(ProductionItem(projectId: pid,
+                category: m['category'] ?? 'その他', name: m['name']));
+            }
+          }
+          if (prodList.isNotEmpty) sb.writeln('・制作物：${prodList.length}件');
+
+          // ★ 機材
+          final equipList = plan['equipment'] as List? ?? [];
+          for (final e in equipList) {
+            final m = e as Map<String, dynamic>;
+            if ((m['name'] ?? '').toString().isNotEmpty) {
+              await provider.addEquipment(EquipmentItem(projectId: pid,
+                category: m['category'] ?? 'その他',
+                name: m['name'],
+                qty: (m['qty'] as num?)?.toInt() ?? 1));
+            }
+          }
+          if (equipList.isNotEmpty) sb.writeln('・機材：${equipList.length}件');
+
           if (plan['summary'] != null) sb.writeln('\n概要：${plan['summary']}');
           setState(() => _result = sb.toString());
           break;
@@ -410,6 +414,8 @@ class _AiScreenState extends State<AiScreen> {
           ),
         ),
 
+        const SizedBox(height: 8),
+
         // ===== モード =====
         Card(
           child: Padding(
@@ -418,10 +424,13 @@ class _AiScreenState extends State<AiScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('解析モード', style: tt.titleMedium),
+                const SizedBox(height: 4),
+                Text('※ 企画書モードは制作物・機材も一括で取り込みます',
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(height: 10),
                 Wrap(spacing: 8, runSpacing: 6,
                   children: _modes.map((m) => ChoiceChip(
-                    label: Text(m.$1),
+                    label: Text(m.$1, style: const TextStyle(fontSize: 12)),
                     selected: _selectedMode == m.$2,
                     onSelected: (_) => setState(() => _selectedMode = m.$2),
                   )).toList()),
@@ -430,60 +439,22 @@ class _AiScreenState extends State<AiScreen> {
           ),
         ),
 
-        // ===== ファイル・テキスト =====
+        const SizedBox(height: 8),
+
+        // ===== テキスト入力 =====
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  Text('書類', style: tt.titleMedium),
-                  const Spacer(),
-                  OutlinedButton.icon(
-                    onPressed: _pickFile,
-                    icon: const Icon(Icons.upload_file_outlined, size: 16),
-                    label: const Text('ファイルを開く')),
-                ]),
-                const SizedBox(height: 12),
-                // ドロップゾーン（ファイルをここにドラッグ）
-                GestureDetector(
-                  onTap: _pickFile,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    decoration: BoxDecoration(
-                      color: glightGreen.withOpacity(0.04),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: glightGreen.withOpacity(0.3),
-                        width: 1.5,
-                        style: BorderStyle.solid,
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.cloud_upload_outlined,
-                          size: 36, color: glightGreen.withOpacity(0.6)),
-                        const SizedBox(height: 8),
-                        Text('ここにファイルをドラッグ、またはタップして選択',
-                          style: TextStyle(fontSize: 13,
-                            color: cs.onSurfaceVariant),
-                          textAlign: TextAlign.center),
-                        const SizedBox(height: 4),
-                        Text('PDF / TXT / MD / STRY 対応',
-                          style: TextStyle(fontSize: 11,
-                            color: cs.onSurfaceVariant.withOpacity(0.6))),
-                      ],
-                    ),
-                  ),
-                ),
+                Text('書類・テキスト', style: tt.titleMedium),
                 const SizedBox(height: 12),
 
-                // 読み込んだファイル表示
+                // ファイル読み込み済み表示
                 if (hasFile)
                   Container(
+                    margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
                       color: glightGreen.withOpacity(0.08),
@@ -504,36 +475,33 @@ class _AiScreenState extends State<AiScreen> {
                     ]),
                   ),
 
-                // PDFのときはテキスト欄を隠す
-                if (_pdfBytes == null) ...[
-                  if (hasFile) const SizedBox(height: 10),
-                  TextField(
-                    controller: _textCtrl,
-                    maxLines: 10,
-                    style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                    decoration: const InputDecoration(
-                      hintText: 'テキストを貼り付け、またはPDF・テキストファイルを開いてください。\n'
-                        '台本・座組表・進行表・企画書・ロケ地リストに対応。'),
-                  ),
-                ] else
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text('PDFをGeminiに直接送って解析します。',
-                      style: tt.bodySmall)),
+                TextField(
+                  controller: _textCtrl,
+                  maxLines: 10,
+                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                  decoration: const InputDecoration(
+                    hintText: '台本・座組表・進行表・企画書・機材リストなどのテキストを貼り付けてください。\n'
+                      '自動判定モードで書類の種類を自動認識します。'),
+                ),
 
                 const SizedBox(height: 14),
-                ElevatedButton.icon(
-                  onPressed: _isLoading ? null : () => _analyze(provider),
-                  icon: _isLoading
-                      ? const SizedBox(width: 16, height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.black))
-                      : const Icon(Icons.auto_awesome_outlined, size: 18),
-                  label: Text(_isLoading ? '解析中...' : 'AIで解析する')),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isLoading ? null : () => _analyze(provider),
+                    icon: _isLoading
+                        ? const SizedBox(width: 16, height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.black))
+                        : const Icon(Icons.auto_awesome_outlined, size: 18),
+                    label: Text(_isLoading ? '解析中...' : 'AIで解析して取り込む')),
+                ),
               ],
             ),
           ),
         ),
+
+        const SizedBox(height: 8),
 
         // ===== 結果 =====
         if (_result.isNotEmpty)

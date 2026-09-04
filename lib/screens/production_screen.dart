@@ -1,6 +1,5 @@
 // 制作物リスト画面
-// 映像・音声・グラフィックなど制作物の進捗を管理する
-// AIアシストでプロジェクト内容から制作物を自動リストアップできる
+// カテゴリ別アコーディオン表示 + AI自動リストアップ
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -14,7 +13,6 @@ import '../widgets/ui_kit.dart';
 class ProductionScreen extends StatelessWidget {
   const ProductionScreen({super.key});
 
-  // ステータスごとの色
   Color _statusColor(ProductionStatus s) {
     switch (s) {
       case ProductionStatus.notStarted: return Colors.grey;
@@ -30,13 +28,26 @@ class ProductionScreen extends StatelessWidget {
     final items = provider.productions;
     final done = items.where((p) => p.status == 'done').length;
 
+    // カテゴリ別にグループ化
+    final Map<String, List<ProductionItem>> grouped = {};
+    for (final cat in ProductionItem.categories) {
+      final catItems = items.where((i) => i.category == cat).toList();
+      grouped[cat] = catItems;
+    }
+    // その他カテゴリに含まれない項目も拾う
+    final knownCats = ProductionItem.categories.toSet();
+    final uncategorized = items.where((i) => !knownCats.contains(i.category)).toList();
+    if (uncategorized.isNotEmpty) {
+      grouped['その他'] = [...(grouped['その他'] ?? []), ...uncategorized];
+    }
+
     return Scaffold(
       body: Column(
         children: [
           // 進捗サマリー
           if (items.isNotEmpty)
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               color: Theme.of(context).colorScheme.surface,
               child: Column(
                 children: [
@@ -45,13 +56,12 @@ class ProductionScreen extends StatelessWidget {
                     children: [
                       Text('$done / ${items.length} 完了',
                         style: const TextStyle(fontWeight: FontWeight.w700)),
-                      Text('${(done / items.length * 100).round()}%',
+                      Text('${items.isEmpty ? 0 : (done / items.length * 100).round()}%',
                         style: const TextStyle(
                           color: glightGreen, fontWeight: FontWeight.w800)),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  // 進捗バー
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
@@ -71,19 +81,23 @@ class ProductionScreen extends StatelessWidget {
                       onPressed: () => _aiSuggest(context, provider),
                       icon: const Icon(Icons.auto_awesome_outlined, size: 16),
                       label: const Text('AIでリストを生成')))
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
-                    itemCount: items.length,
-                    itemBuilder: (_, i) => _ProductionTile(
-                      item: items[i], provider: provider,
-                      statusColor: _statusColor(items[i].statusEnum))),
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 90),
+                    children: grouped.entries
+                      .where((e) => e.value.isNotEmpty)
+                      .map((e) => _CategoryAccordion(
+                        category: e.key,
+                        items: e.value,
+                        provider: provider,
+                        statusColor: _statusColor,
+                      )).toList(),
+                  ),
           ),
         ],
       ),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // AIで一括生成
           FloatingActionButton.small(
             heroTag: 'ai',
             onPressed: () => _aiSuggest(context, provider),
@@ -105,7 +119,6 @@ class ProductionScreen extends StatelessWidget {
       projectId: provider.currentProject!.id, provider: provider));
   }
 
-  // AIでプロジェクト内容から制作物をリストアップ
   Future<void> _aiSuggest(BuildContext ctx, ProjectProvider provider) async {
     final prefs = await SharedPreferences.getInstance();
     final apiKey = prefs.getString('gemini_api_key') ?? '';
@@ -118,11 +131,12 @@ class ProductionScreen extends StatelessWidget {
     final project = provider.currentProject!;
     final prompt = '''
 ${project.type.label}「${project.title}」の制作物リストを提案してください。
-JSONのみ出力してください。
+JSONのみ出力してください。カテゴリは以下のいずれかを使用:
+書類・台本, 映像, 音声・楽曲, グラフィック・デザイン, 衣装・小道具, その他
 
-[{"category":"映像/音声/グラフィック/書類/衣装・小道具/その他のいずれか","name":"制作物名","owner":"担当（空でよい）","deadline":"期日（空でよい）"}]
+[{"category":"カテゴリ名","name":"制作物名","owner":"","deadline":""}]
 
-映像制作に必要な一般的な制作物を10〜15件リストアップしてください。
+10〜15件リストアップしてください。
 ''';
 
     ScaffoldMessenger.of(ctx).showSnackBar(
@@ -131,7 +145,7 @@ JSONのみ出力してください。
     try {
       final url = Uri.parse(
         'https://generativelanguage.googleapis.com/v1beta/models/'
-        'gemini-3.6-flash:generateContent?key=$apiKey');
+        'gemini-2.0-flash:generateContent?key=$apiKey');
       final response = await http.post(url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -139,7 +153,7 @@ JSONのみ出力してください。
           'generationConfig': {'temperature': 0.5, 'maxOutputTokens': 2048},
         }));
 
-      if (response.statusCode != 200) throw Exception('APIエラー');
+      if (response.statusCode != 200) throw Exception('APIエラー: ${response.statusCode}');
       final data = jsonDecode(response.body);
       var content = data['candidates'][0]['content']['parts'][0]['text'] as String;
       content = content.replaceAll('```json', '').replaceAll('```', '').trim();
@@ -156,15 +170,116 @@ JSONのみ出力してください。
           deadline: m['deadline'] ?? '',
         ));
       }
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        SnackBar(content: Text('${items.length}件の制作物を追加しました')));
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(content: Text('${items.length}件の制作物を追加しました')));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        SnackBar(content: Text('エラー: $e')));
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(content: Text('エラー: $e')));
+      }
     }
   }
 }
 
+// ===== カテゴリアコーディオン =====
+class _CategoryAccordion extends StatefulWidget {
+  final String category;
+  final List<ProductionItem> items;
+  final ProjectProvider provider;
+  final Color Function(ProductionStatus) statusColor;
+
+  const _CategoryAccordion({
+    required this.category,
+    required this.items,
+    required this.provider,
+    required this.statusColor,
+  });
+
+  @override
+  State<_CategoryAccordion> createState() => _CategoryAccordionState();
+}
+
+class _CategoryAccordionState extends State<_CategoryAccordion> {
+  bool _expanded = true; // デフォルトで開いた状態
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final done = widget.items.where((i) => i.status == 'done').length;
+    final total = widget.items.length;
+
+    // カテゴリアイコン
+    final icon = _categoryIcon(widget.category);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        children: [
+          // カテゴリヘッダー（クリックで展開/折りたたみ）
+          InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+              child: Row(
+                children: [
+                  Icon(icon, color: glightGreen, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(widget.category,
+                      style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                  // 完了数バッジ
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: done == total
+                          ? Colors.green.withOpacity(0.15)
+                          : cs.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(99)),
+                    child: Text('$done/$total',
+                      style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w700,
+                        color: done == total ? Colors.green : cs.onSurfaceVariant)),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    color: cs.onSurfaceVariant),
+                ],
+              ),
+            ),
+          ),
+          // アイテムリスト（展開時のみ表示）
+          if (_expanded) ...[
+            const Divider(height: 1),
+            ...widget.items.map((item) => _ProductionTile(
+              item: item,
+              provider: widget.provider,
+              statusColor: widget.statusColor(item.statusEnum),
+            )),
+          ],
+        ],
+      ),
+    );
+  }
+
+  IconData _categoryIcon(String category) {
+    switch (category) {
+      case '書類・台本':         return Icons.description_outlined;
+      case '映像':              return Icons.videocam_outlined;
+      case '音声・楽曲':         return Icons.music_note_outlined;
+      case 'グラフィック・デザイン': return Icons.palette_outlined;
+      case '衣装・小道具':       return Icons.checkroom_outlined;
+      default:                  return Icons.checklist_outlined;
+    }
+  }
+}
+
+// ===== 制作物タイル =====
 class _ProductionTile extends StatelessWidget {
   final ProductionItem item;
   final ProjectProvider provider;
@@ -177,78 +292,73 @@ class _ProductionTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => showAppSheet(context, _ProductionEditSheet(
-          projectId: item.projectId, provider: provider, item: item)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-          child: Row(
-            children: [
-              // ステータスインジケーター
-              Container(width: 4, height: 44,
-                decoration: BoxDecoration(
-                  color: statusColor,
-                  borderRadius: BorderRadius.circular(2))),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Tag(item.category, color: Colors.blue),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(item.name,
-                        style: tt.titleMedium, overflow: TextOverflow.ellipsis)),
-                    ]),
-                    const SizedBox(height: 4),
+    return InkWell(
+      onTap: () => showAppSheet(context, _ProductionEditSheet(
+        projectId: item.projectId, provider: provider, item: item)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+        child: Row(
+          children: [
+            // ステータスインジケーター
+            Container(width: 3, height: 40,
+              decoration: BoxDecoration(
+                color: statusColor,
+                borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.name,
+                    style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis),
+                  if (item.owner.isNotEmpty || item.deadline.isNotEmpty)
                     Row(children: [
                       if (item.owner.isNotEmpty) ...[
-                        Icon(Icons.person_outline, size: 13,
+                        Icon(Icons.person_outline, size: 12,
                           color: cs.onSurfaceVariant),
                         const SizedBox(width: 3),
                         Text(item.owner, style: tt.bodySmall),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                       ],
                       if (item.deadline.isNotEmpty) ...[
-                        Icon(Icons.calendar_today_outlined, size: 13,
+                        Icon(Icons.calendar_today_outlined, size: 12,
                           color: cs.onSurfaceVariant),
                         const SizedBox(width: 3),
                         Text(item.deadline, style: tt.bodySmall),
                       ],
                     ]),
-                  ],
-                ),
+                ],
               ),
-              // ステータス選択
-              PopupMenuButton<String>(
-                initialValue: item.status,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: statusColor.withOpacity(0.3))),
-                  child: Text(item.statusEnum.label,
-                    style: TextStyle(fontSize: 12, color: statusColor,
-                      fontWeight: FontWeight.w700))),
-                itemBuilder: (_) => ProductionStatus.values.map((s) =>
-                  PopupMenuItem(value: s.name, child: Text(s.label))).toList(),
-                onSelected: (v) => provider.updateProduction(ProductionItem(
-                  id: item.id, projectId: item.projectId,
-                  category: item.category, name: item.name,
-                  owner: item.owner, deadline: item.deadline,
-                  status: v, memo: item.memo, sortKey: item.sortKey)),
-              ),
-            ],
-          ),
+            ),
+            // ステータス選択
+            PopupMenuButton<String>(
+              initialValue: item.status,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: statusColor.withOpacity(0.3))),
+                child: Text(item.statusEnum.label,
+                  style: TextStyle(fontSize: 11, color: statusColor,
+                    fontWeight: FontWeight.w700))),
+              itemBuilder: (_) => ProductionStatus.values.map((s) =>
+                PopupMenuItem(value: s.name, child: Text(s.label))).toList(),
+              onSelected: (v) => provider.updateProduction(ProductionItem(
+                id: item.id, projectId: item.projectId,
+                category: item.category, name: item.name,
+                owner: item.owner, deadline: item.deadline,
+                status: v, memo: item.memo, sortKey: item.sortKey)),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+// ===== 編集シート =====
 class _ProductionEditSheet extends StatefulWidget {
   final String projectId;
   final ProjectProvider provider;
@@ -304,12 +414,12 @@ class _ProductionEditSheetState extends State<_ProductionEditSheet> {
               Text(isEdit ? '制作物を編集' : '制作物を追加',
                 style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 14),
-              // カテゴリ
               Text('カテゴリ', style: Theme.of(context).textTheme.labelMedium),
               const SizedBox(height: 8),
               Wrap(spacing: 8, runSpacing: 6,
                 children: ProductionItem.categories.map((c) => ChoiceChip(
-                  label: Text(c), selected: _category == c,
+                  label: Text(c, style: const TextStyle(fontSize: 12)),
+                  selected: _category == c,
                   onSelected: (_) => setState(() => _category = c))).toList()),
               const SizedBox(height: 12),
               TextField(controller: _nameCtrl,
@@ -324,19 +434,37 @@ class _ProductionEditSheetState extends State<_ProductionEditSheet> {
                     labelText: '期日', hintText: '9/30'))),
               ]),
               const SizedBox(height: 12),
-              // ステータス
               Text('ステータス', style: Theme.of(context).textTheme.labelMedium),
               const SizedBox(height: 8),
               Wrap(spacing: 8, runSpacing: 6,
                 children: ProductionStatus.values.map((s) => ChoiceChip(
-                  label: Text(s.label), selected: _status == s.name,
+                  label: Text(s.label, style: const TextStyle(fontSize: 12)),
+                  selected: _status == s.name,
                   onSelected: (_) => setState(() => _status = s.name))).toList()),
               const SizedBox(height: 12),
               TextField(controller: _memoCtrl,
                 decoration: const InputDecoration(labelText: '備考')),
               const SizedBox(height: 20),
-              ElevatedButton(onPressed: _save,
-                child: Text(isEdit ? '更新' : '追加')),
+              Row(children: [
+                if (isEdit) ...[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        widget.provider.deleteProduction(widget.item!.id);
+                        Navigator.pop(context);
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: const BorderSide(color: Colors.red)),
+                      child: const Text('削除')),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _save,
+                    child: Text(isEdit ? '更新' : '追加'))),
+              ]),
             ],
           ),
         ),

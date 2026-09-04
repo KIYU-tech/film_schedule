@@ -16,6 +16,16 @@ class TechScreen extends StatelessWidget {
     final project = provider.currentProject;
     if (project == null) return const SizedBox.shrink();
 
+    // 映画・動画タイプは機材リストのみ（配信設定タブ不要）
+    final showTechSettings = project.type != ProjectType.film &&
+                             project.type != ProjectType.video;
+
+    if (!showTechSettings) {
+      // 機材リストのみ表示
+      return _EquipmentView(provider: provider);
+    }
+
+    // 配信系タイプは2タブ表示
     return DefaultTabController(
       length: 2,
       child: Column(
@@ -201,7 +211,6 @@ class _EquipmentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    // 貸出中かつ未返却の場合はオレンジ表示
     final isOnLoan = item.loanFrom.isNotEmpty && !item.isReturned;
 
     return Card(
@@ -213,7 +222,6 @@ class _EquipmentTile extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
           child: Row(
             children: [
-              // 準備済チェック
               GestureDetector(
                 onTap: () => provider.updateEquipment(EquipmentItem(
                   id: item.id, projectId: item.projectId,
@@ -245,10 +253,8 @@ class _EquipmentTile extends StatelessWidget {
                           decoration: item.isDone
                               ? TextDecoration.lineThrough : null),
                         overflow: TextOverflow.ellipsis)),
-                      Text('×${item.qty}',
-                        style: tt.bodySmall),
+                      Text('×${item.qty}', style: tt.bodySmall),
                     ]),
-                    // 貸出情報
                     if (item.loanFrom.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Row(children: [
@@ -270,7 +276,6 @@ class _EquipmentTile extends StatelessWidget {
                   ],
                 ),
               ),
-              // 返却ボタン（貸出中のとき）
               if (isOnLoan)
                 TextButton(
                   onPressed: () => provider.updateEquipment(EquipmentItem(
@@ -280,8 +285,7 @@ class _EquipmentTile extends StatelessWidget {
                     isDone: item.isDone,
                     loanFrom: item.loanFrom, loanDate: item.loanDate,
                     returnDate: item.returnDate, isReturned: true)),
-                  child: const Text('返却済',
-                    style: TextStyle(fontSize: 12))),
+                  child: const Text('返却済', style: TextStyle(fontSize: 12))),
               IconButton(icon: const Icon(Icons.more_vert, size: 18),
                 onPressed: () => _showOptions(context)),
             ],
@@ -346,8 +350,8 @@ class _EquipmentEditSheetState extends State<_EquipmentEditSheet> {
     _loanFromCtrl   = TextEditingController(text: e?.loanFrom ?? '');
     _loanDateCtrl   = TextEditingController(text: e?.loanDate ?? '');
     _returnDateCtrl = TextEditingController(text: e?.returnDate ?? '');
-    _category  = e?.category ?? 'カメラ';
-    _isDone    = e?.isDone ?? false;
+    _category   = e?.category ?? 'カメラ';
+    _isDone     = e?.isDone ?? false;
     _isReturned = e?.isReturned ?? false;
   }
 
@@ -404,7 +408,6 @@ class _EquipmentEditSheetState extends State<_EquipmentEditSheet> {
                       decoration: const InputDecoration(labelText: '担当'))),
                   ]),
                   const SizedBox(height: 12),
-                  // 貸出管理セクション
                   const SectionHeader(title: '貸出管理'),
                   TextField(controller: _loanFromCtrl,
                     decoration: const InputDecoration(
