@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/project.dart';
 import '../providers/project_provider.dart';
 import '../theme.dart';
@@ -13,6 +14,8 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<ProjectProvider>();
     final projects = provider.projects;
+    // Supabase.instance.client.auth.currentUser → 現在ログイン中のユーザー
+    final user = Supabase.instance.client.auth.currentUser;
 
     return Scaffold(
       appBar: AppBar(
@@ -22,22 +25,47 @@ class HomeScreen extends StatelessWidget {
               width: 28, height: 28,
               decoration: BoxDecoration(
                 color: glightGreen,
-                borderRadius: BorderRadius.circular(6),
-              ),
+                borderRadius: BorderRadius.circular(6)),
               child: const Center(
                 child: Text('G',
                   style: TextStyle(
                     color: Colors.black,
                     fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  )),
-              ),
+                    fontSize: 16))),
             ),
             const SizedBox(width: 10),
             const Text('制作スケジュール帳',
               style: TextStyle(fontWeight: FontWeight.w700)),
           ],
         ),
+        actions: [
+          // ユーザーメニュー
+          PopupMenuButton(
+            icon: const Icon(Icons.account_circle_outlined),
+            itemBuilder: (_) => <PopupMenuEntry<String>>[
+              PopupMenuItem(
+                enabled: false,
+                child: Text(
+                  user?.email ?? '',
+                  style: TextStyle(
+                    fontSize: 12, color: Colors.grey[500]))),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(children: [
+                  Icon(Icons.logout, size: 18),
+                  SizedBox(width: 8),
+                  Text('ログアウト'),
+                ])),
+            ],
+            onSelected: (val) async {
+              if (val == 'logout') {
+                // ログアウト → AuthScreenに自動遷移（StreamBuilderが検知）
+                await Supabase.instance.client.auth.signOut();
+              }
+            },
+          ),
+        ],
       ),
       body: projects.isEmpty
           ? _buildEmpty(context)
@@ -109,14 +137,13 @@ class _ProjectTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Card(
       child: ListTile(
-        contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16, vertical: 10),
         leading: Container(
           width: 44, height: 44,
           decoration: BoxDecoration(
             color: glightGreenLight,
-            borderRadius: BorderRadius.circular(10),
-          ),
+            borderRadius: BorderRadius.circular(10)),
           child: Icon(_icon, color: glightGreenDark, size: 22),
         ),
         title: Text(
@@ -124,10 +151,7 @@ class _ProjectTile extends StatelessWidget {
           style: TextStyle(
             fontWeight: FontWeight.w600,
             color: project.title.isEmpty
-                ? cs.onSurface.withOpacity(0.4)
-                : cs.onSurface,
-          ),
-        ),
+                ? cs.onSurface.withOpacity(0.4) : cs.onSurface)),
         subtitle: Row(
           children: [
             Container(
@@ -135,14 +159,11 @@ class _ProjectTile extends StatelessWidget {
                 horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
                 color: glightGreen.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(4),
-              ),
+                borderRadius: BorderRadius.circular(4)),
               child: Text(project.type.label,
                 style: const TextStyle(
-                  fontSize: 11,
-                  color: glightGreen,
-                  fontWeight: FontWeight.w700,
-                )),
+                  fontSize: 11, color: glightGreen,
+                  fontWeight: FontWeight.w700)),
             ),
             if (project.director.isNotEmpty) ...[
               const SizedBox(width: 8),
@@ -160,8 +181,7 @@ class _ProjectTile extends StatelessWidget {
           await provider.openProject(project.id);
           if (context.mounted) {
             Navigator.push(context,
-              MaterialPageRoute(
-                builder: (_) => const ProjectScreen()));
+              MaterialPageRoute(builder: (_) => const ProjectScreen()));
           }
         },
       ),
@@ -197,9 +217,8 @@ class _NewProjectSheetState extends State<_NewProjectSheet> {
       builder: (_, controller) => Container(
         decoration: BoxDecoration(
           color: cs.surface,
-          borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(20))),
         child: Column(
           children: [
             Container(
@@ -207,9 +226,7 @@ class _NewProjectSheetState extends State<_NewProjectSheet> {
               width: 36, height: 4,
               decoration: BoxDecoration(
                 color: cs.onSurface.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+                borderRadius: BorderRadius.circular(2))),
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 20, vertical: 10),
@@ -217,10 +234,8 @@ class _NewProjectSheetState extends State<_NewProjectSheet> {
                 children: [
                   Text('新規プロジェクト',
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: cs.onSurface,
-                    )),
+                      fontSize: 18, fontWeight: FontWeight.w700,
+                      color: cs.onSurface)),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.close),
@@ -233,7 +248,6 @@ class _NewProjectSheetState extends State<_NewProjectSheet> {
                 controller: controller,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
-                  // STEP 01
                   _stepLabel('01', '制作の種類'),
                   const SizedBox(height: 12),
                   GridView.builder(
@@ -242,31 +256,24 @@ class _NewProjectSheetState extends State<_NewProjectSheet> {
                     gridDelegate:
                       const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        childAspectRatio: 1.3,
-                      ),
+                        crossAxisSpacing: 10, mainAxisSpacing: 10,
+                        childAspectRatio: 1.3),
                     itemCount: ProjectType.values.length,
                     itemBuilder: (_, i) {
                       final t = ProjectType.values[i];
                       return TypeCard(
-                        type: t,
-                        selected: _type == t,
-                        onTap: () => setState(() => _type = t),
-                      );
+                        type: t, selected: _type == t,
+                        onTap: () => setState(() => _type = t));
                     },
                   ),
                   const SizedBox(height: 24),
-                  // STEP 02
                   _stepLabel('02', _type.titleLabel),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _titleCtrl,
                     decoration: InputDecoration(
                       hintText: _type == ProjectType.film
-                          ? '例：夏の終わりに'
-                          : '例：〇〇フェス2024',
-                    ),
+                          ? '例：夏の終わりに' : '例：〇〇フェス2024'),
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
@@ -277,8 +284,7 @@ class _NewProjectSheetState extends State<_NewProjectSheet> {
                           ? const SizedBox(
                               width: 20, height: 20,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.black))
+                                strokeWidth: 2, color: Colors.black))
                           : const Text('プロジェクトを作成 →'),
                     ),
                   ),
@@ -296,18 +302,14 @@ class _NewProjectSheetState extends State<_NewProjectSheet> {
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
             color: glightGreen.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(6),
-          ),
+            borderRadius: BorderRadius.circular(6)),
           child: Text('STEP $num',
             style: const TextStyle(
-              fontSize: 11,
-              color: glightGreen,
-              fontWeight: FontWeight.w700,
-            )),
+              fontSize: 11, color: glightGreen,
+              fontWeight: FontWeight.w700)),
         ),
         const SizedBox(width: 10),
         Text(label,
@@ -321,9 +323,7 @@ class _NewProjectSheetState extends State<_NewProjectSheet> {
     setState(() => _creating = true);
     final provider = context.read<ProjectProvider>();
     await provider.createProject(
-      title: _titleCtrl.text.trim(),
-      type: _type,
-    );
+      title: _titleCtrl.text.trim(), type: _type);
     if (mounted) {
       Navigator.pop(context);
       Navigator.push(context,
