@@ -10,6 +10,9 @@ import '../providers/project_provider.dart';
 import '../theme.dart';
 import '../widgets/ui_kit.dart';
 
+// Web専用：dart:htmlを条件付きでimport
+import 'ai_screen_web.dart' if (dart.library.io) 'ai_screen_stub.dart';
+
 class AiScreen extends StatefulWidget {
   const AiScreen({super.key});
 
@@ -65,10 +68,27 @@ class _AiScreenState extends State<AiScreen> {
     _showSnack('APIキーを保存しました');
   }
 
-  // Webでのファイル選択（dart:htmlを使わずJSチャネル経由）
+  // ファイル選択（Web対応）
   Future<void> _pickFile() async {
-    if (!kIsWeb) { _showSnack('ファイル選択はWeb版のみ対応しています'); return; }
-    _showSnack('ファイルをテキスト欄に貼り付けてください（PDF以外）');
+    final result = await pickFileForAi();
+    if (result == null) return;
+
+    if (result.isPdf) {
+      setState(() {
+        _pdfBytes = result.bytes;
+        _fileName = result.name;
+        _textCtrl.text = '';
+      });
+      _showSnack('${result.name} を読み込みました（PDF）');
+    } else {
+      final text = utf8.decode(result.bytes, allowMalformed: true);
+      setState(() {
+        _pdfBytes = null;
+        _fileName = result.name;
+        _textCtrl.text = text;
+      });
+      _showSnack('${result.name} を読み込みました');
+    }
   }
 
   void _clearFile() {
@@ -165,21 +185,20 @@ class _AiScreenState extends State<AiScreen> {
             '[{"name":"","address":"","access":"","hours":"","contact":"","memo":""}]\n\n$body';
       case 'production':
         return '$base\n\n書類から制作物リストをJSON配列で抽出してください。\n'
-            'カテゴリは「書類・台本」「映像」「音声・楽曲」「グラフィック・デザイン」「衣装・小道具」「その他」のいずれかを使用。\n'
+            'カテゴリは「書類・台本」「映像」「音声・楽曲」「グラフィック・デザイン」「衣装・小道具」「その他」のいずれか。\n'
             '[{"category":"","name":"","owner":"","deadline":""}]\n\n$body';
       case 'equipment':
         return '$base\n\n書類から機材リストをJSON配列で抽出してください。\n'
-            'カテゴリは「カメラ」「スイッチャー」「音声」「照明」「PC・配信」「回線」「ケーブル」「電源」「その他」のいずれかを使用。\n'
+            'カテゴリは「カメラ」「スイッチャー」「音声」「照明」「PC・配信」「回線」「ケーブル」「電源」「その他」のいずれか。\n'
             '[{"category":"","name":"","qty":1,"owner":"","memo":""}]\n\n$body';
       default:
         return '$base\n\n企画書・書類から情報を抽出してください。\n'
-            '{"title":"","summary":"","cast":[{"name":"","role":""}],"rundown":[{"kind":"本番","name":"","minutes":0}],"locations":[{"name":"","address":""}],'
-            '"productions":[{"category":"","name":""}],"equipment":[{"category":"","name":"","qty":1}]}\n\n$body';
+            '{"title":"","summary":"","cast":[{"name":"","role":""}],"rundown":[{"kind":"本番","name":"","minutes":0}],'
+            '"locations":[{"name":"","address":""}],"productions":[{"category":"","name":""}],"equipment":[{"category":"","name":"","qty":1}]}\n\n$body';
     }
   }
 
-  Future<void> _applyResult(String mode, String content,
-      ProjectProvider provider) async {
+  Future<void> _applyResult(String mode, String content, ProjectProvider provider) async {
     try {
       final jsonStr = _extractJson(content);
       final pid = provider.currentProject!.id;
@@ -241,63 +260,45 @@ class _AiScreenState extends State<AiScreen> {
           setState(() => _result = '✓ ${locs.length}件のロケ地を追加しました');
           break;
 
-        // ★ 新機能：制作物リストに自動入力
         case 'production':
           final prods = jsonDecode(jsonStr) as List;
           for (final p in prods) {
             final m = p as Map<String, dynamic>;
-            await provider.addProduction(ProductionItem(
-              projectId: pid,
-              category: m['category'] ?? 'その他',
-              name: m['name'] ?? '',
-              owner: m['owner'] ?? '',
-              deadline: m['deadline'] ?? '',
-            ));
+            await provider.addProduction(ProductionItem(projectId: pid,
+              category: m['category'] ?? 'その他', name: m['name'] ?? '',
+              owner: m['owner'] ?? '', deadline: m['deadline'] ?? ''));
           }
           setState(() => _result = '✓ ${prods.length}件の制作物を追加しました');
           break;
 
-        // ★ 新機能：機材リストに自動入力
         case 'equipment':
           final equips = jsonDecode(jsonStr) as List;
           for (final e in equips) {
             final m = e as Map<String, dynamic>;
-            await provider.addEquipment(EquipmentItem(
-              projectId: pid,
-              category: m['category'] ?? 'その他',
-              name: m['name'] ?? '',
+            await provider.addEquipment(EquipmentItem(projectId: pid,
+              category: m['category'] ?? 'その他', name: m['name'] ?? '',
               qty: (m['qty'] as num?)?.toInt() ?? 1,
-              owner: m['owner'] ?? '',
-              memo: m['memo'] ?? '',
-            ));
+              owner: m['owner'] ?? '', memo: m['memo'] ?? ''));
           }
           setState(() => _result = '✓ ${equips.length}件の機材を追加しました');
           break;
 
         default:
-          // 企画書：複数タブに一括反映
           final plan = jsonDecode(jsonStr) as Map<String, dynamic>;
           final project = provider.currentProject!;
           final sb = StringBuffer('✓ 企画書を解析しました\n');
-
-          if (plan['title'] != null && (plan['title'] as String).isNotEmpty
-              && project.title.isEmpty) {
+          if (plan['title'] != null && (plan['title'] as String).isNotEmpty && project.title.isEmpty) {
             await provider.updateProject(project.copyWith(title: plan['title']));
             sb.writeln('・タイトル：${plan['title']}');
           }
-
-          // 出演者
           final castList = plan['cast'] as List? ?? [];
           for (final c in castList) {
             final m = c as Map<String, dynamic>;
             if ((m['name'] ?? '').toString().isNotEmpty) {
-              await provider.addCastMember(CastMember(projectId: pid,
-                name: m['name'], role: m['role'] ?? ''));
+              await provider.addCastMember(CastMember(projectId: pid, name: m['name'], role: m['role'] ?? ''));
             }
           }
           if (castList.isNotEmpty) sb.writeln('・出演者：${castList.length}名');
-
-          // 進行表
           final rdList = plan['rundown'] as List? ?? [];
           for (final r in rdList) {
             final m = r as Map<String, dynamic>;
@@ -306,19 +307,14 @@ class _AiScreenState extends State<AiScreen> {
               minutes: (m['minutes'] as num?)?.toInt() ?? 0));
           }
           if (rdList.isNotEmpty) sb.writeln('・進行項目：${rdList.length}件');
-
-          // ロケ地
           final locList = plan['locations'] as List? ?? [];
           for (final l in locList) {
             final m = l as Map<String, dynamic>;
             if ((m['name'] ?? '').toString().isNotEmpty) {
-              await provider.addLocation(LocationItem(projectId: pid,
-                name: m['name'], address: m['address'] ?? ''));
+              await provider.addLocation(LocationItem(projectId: pid, name: m['name'], address: m['address'] ?? ''));
             }
           }
           if (locList.isNotEmpty) sb.writeln('・ロケ地：${locList.length}件');
-
-          // ★ 制作物
           final prodList = plan['productions'] as List? ?? [];
           for (final p in prodList) {
             final m = p as Map<String, dynamic>;
@@ -328,20 +324,16 @@ class _AiScreenState extends State<AiScreen> {
             }
           }
           if (prodList.isNotEmpty) sb.writeln('・制作物：${prodList.length}件');
-
-          // ★ 機材
           final equipList = plan['equipment'] as List? ?? [];
           for (final e in equipList) {
             final m = e as Map<String, dynamic>;
             if ((m['name'] ?? '').toString().isNotEmpty) {
               await provider.addEquipment(EquipmentItem(projectId: pid,
-                category: m['category'] ?? 'その他',
-                name: m['name'],
+                category: m['category'] ?? 'その他', name: m['name'],
                 qty: (m['qty'] as num?)?.toInt() ?? 1));
             }
           }
           if (equipList.isNotEmpty) sb.writeln('・機材：${equipList.length}件');
-
           if (plan['summary'] != null) sb.writeln('\n概要：${plan['summary']}');
           setState(() => _result = sb.toString());
           break;
@@ -377,7 +369,7 @@ class _AiScreenState extends State<AiScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
       children: [
-        // ===== APIキー =====
+        // APIキー
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -396,19 +388,15 @@ class _AiScreenState extends State<AiScreen> {
                 if (_showApiKey) ...[
                   const SizedBox(height: 10),
                   TextField(controller: _apiKeyCtrl, obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'APIキー', hintText: 'AIza...')),
+                    decoration: const InputDecoration(labelText: 'APIキー', hintText: 'AIza...')),
                   const SizedBox(height: 8),
                   ElevatedButton(onPressed: _saveApiKey, child: const Text('保存')),
                   const SizedBox(height: 6),
-                  Text('aistudio.google.com から無料で取得できます',
-                    style: tt.bodySmall),
+                  Text('aistudio.google.com から無料で取得できます', style: tt.bodySmall),
                 ] else
-                  Text(
-                    _apiKeyCtrl.text.isEmpty ? '未設定' : '設定済み ✓',
+                  Text(_apiKeyCtrl.text.isEmpty ? '未設定' : '設定済み ✓',
                     style: TextStyle(fontSize: 12,
-                      color: _apiKeyCtrl.text.isEmpty
-                          ? Colors.orange : glightGreen)),
+                      color: _apiKeyCtrl.text.isEmpty ? Colors.orange : glightGreen)),
               ],
             ),
           ),
@@ -416,7 +404,7 @@ class _AiScreenState extends State<AiScreen> {
 
         const SizedBox(height: 8),
 
-        // ===== モード =====
+        // 解析モード
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -441,14 +429,21 @@ class _AiScreenState extends State<AiScreen> {
 
         const SizedBox(height: 8),
 
-        // ===== テキスト入力 =====
+        // 書類・テキスト
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('書類・テキスト', style: tt.titleMedium),
+                Row(children: [
+                  Text('書類', style: tt.titleMedium),
+                  const Spacer(),
+                  OutlinedButton.icon(
+                    onPressed: _pickFile,
+                    icon: const Icon(Icons.upload_file_outlined, size: 16),
+                    label: const Text('ファイルを開く')),
+                ]),
                 const SizedBox(height: 12),
 
                 // ファイル読み込み済み表示
@@ -475,14 +470,20 @@ class _AiScreenState extends State<AiScreen> {
                     ]),
                   ),
 
-                TextField(
-                  controller: _textCtrl,
-                  maxLines: 10,
-                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                  decoration: const InputDecoration(
-                    hintText: '台本・座組表・進行表・企画書・機材リストなどのテキストを貼り付けてください。\n'
-                      '自動判定モードで書類の種類を自動認識します。'),
-                ),
+                // テキスト欄（PDFのときは非表示）
+                if (_pdfBytes == null)
+                  TextField(
+                    controller: _textCtrl,
+                    maxLines: 10,
+                    style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                    decoration: const InputDecoration(
+                      hintText: '台本・座組表・進行表・企画書・機材リストなどのテキストを貼り付けてください。\n'
+                        '自動判定モードで書類の種類を自動認識します。'),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text('PDFをGeminiに直接送って解析します。', style: tt.bodySmall)),
 
                 const SizedBox(height: 14),
                 SizedBox(
@@ -491,8 +492,7 @@ class _AiScreenState extends State<AiScreen> {
                     onPressed: _isLoading ? null : () => _analyze(provider),
                     icon: _isLoading
                         ? const SizedBox(width: 16, height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.black))
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
                         : const Icon(Icons.auto_awesome_outlined, size: 18),
                     label: Text(_isLoading ? '解析中...' : 'AIで解析して取り込む')),
                 ),
@@ -503,7 +503,7 @@ class _AiScreenState extends State<AiScreen> {
 
         const SizedBox(height: 8),
 
-        // ===== 結果 =====
+        // 結果
         if (_result.isNotEmpty)
           Card(
             child: Padding(
