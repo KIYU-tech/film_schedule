@@ -7,12 +7,8 @@ class TypeCard extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const TypeCard({
-    super.key,
-    required this.type,
-    required this.selected,
-    required this.onTap,
-  });
+  const TypeCard({super.key, required this.type,
+    required this.selected, required this.onTap});
 
   IconData get _icon {
     switch (type) {
@@ -31,52 +27,47 @@ class TypeCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.all(16),
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: selected ? glightGreen : cs.surface,
+          color: selected ? glightGreen : cs.surfaceContainerHighest,
           border: Border.all(
             color: selected ? glightGreen : cs.outline,
-            width: selected ? 2 : 1,
-          ),
-          borderRadius: BorderRadius.circular(14),
+            width: selected ? 2 : 1),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: selected
               ? [BoxShadow(
                   color: glightGreen.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4))]
+                  blurRadius: 16, offset: const Offset(0, 6))]
               : [],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              _icon,
-              size: 26,
-              color: selected ? Colors.black : glightGreen,
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: selected
+                    ? Colors.black.withOpacity(0.15)
+                    : glightGreen.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10)),
+              child: Icon(_icon, size: 20,
+                color: selected ? Colors.black : glightGreen),
             ),
             const SizedBox(height: 10),
-            Text(
-              type.label,
+            Text(type.label,
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: selected ? Colors.black : cs.onSurface,
-              ),
-            ),
+                fontSize: 14, fontWeight: FontWeight.w700,
+                color: selected ? Colors.black : cs.onSurface)),
             const SizedBox(height: 4),
-            Text(
-              type.description,
+            Text(type.description,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 11, height: 1.5,
                 color: selected
-                    ? Colors.black87
-                    : cs.onSurface.withOpacity(0.5),
-                height: 1.5,
-              ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
+                    ? Colors.black.withOpacity(0.7)
+                    : cs.onSurfaceVariant),
+              maxLines: 3, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),

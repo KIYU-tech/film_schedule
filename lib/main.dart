@@ -4,28 +4,32 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_config.dart';
 import 'theme.dart';
 import 'providers/project_provider.dart';
+import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
 
-// main関数はアプリの起動点
-// async → 非同期処理を使うための宣言
 void main() async {
-  // Flutter本体の初期化（非同期処理の前に必要）
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Supabaseの初期化
-  // url と anonKey は supabase_config.dart から読み込む
   await Supabase.initialize(
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
   );
 
-  final provider = ProjectProvider();
-  await provider.init();
+  final projectProvider = ProjectProvider();
+  final themeProvider = ThemeProvider();
+  await Future.wait([
+    projectProvider.init(),
+    themeProvider.init(),
+  ]);
 
   runApp(
-    ChangeNotifierProvider.value(
-      value: provider,
+    // MultiProvider → 複数のProviderをまとめて登録
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: projectProvider),
+        ChangeNotifierProvider.value(value: themeProvider),
+      ],
       child: const FilmScheduleApp(),
     ),
   );
@@ -36,26 +40,20 @@ class FilmScheduleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ThemeProviderを監視して、テーマ変更時に再描画
+    final themeProvider = context.watch<ThemeProvider>();
+
     return MaterialApp(
       title: '制作スケジュール帳',
       debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(dark: true),
-      darkTheme: buildAppTheme(dark: true),
-      themeMode: ThemeMode.dark,
-      // StreamBuilder → データの流れ（Stream）を監視してUIを更新する
-      // Supabaseのログイン状態の変化を監視している
+      theme: buildAppTheme(dark: false),  // ライトテーマ
+      darkTheme: buildAppTheme(dark: true), // ダークテーマ
+      themeMode: themeProvider.mode,        // 現在のモードを反映
       home: StreamBuilder<AuthState>(
-        // onAuthStateChange → ログイン・ログアウト時に発火するStream
         stream: Supabase.instance.client.auth.onAuthStateChange,
         builder: (context, snapshot) {
-          // snapshot.data → Streamから届いたデータ
           final session = snapshot.data?.session;
-
-          // セッションがあれば（ログイン済み）ホーム画面
-          // なければログイン画面
-          if (session != null) {
-            return const HomeScreen();
-          }
+          if (session != null) return const HomeScreen();
           return const AuthScreen();
         },
       ),
