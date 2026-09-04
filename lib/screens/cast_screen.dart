@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
@@ -8,6 +7,7 @@ import '../models/project.dart';
 import '../providers/project_provider.dart';
 import '../theme.dart';
 import '../widgets/ui_kit.dart';
+import 'ai_screen_web.dart' if (dart.library.io) 'ai_screen_stub.dart';
 
 class CastScreen extends StatelessWidget {
   const CastScreen({super.key});
@@ -73,30 +73,45 @@ class _CastTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Card(
       child: ListTile(
         leading: CircleAvatar(
           radius: 22,
           backgroundColor: glightGreen.withOpacity(0.15),
-          // 写真があれば表示、なければイニシャル
           backgroundImage: member.photoBase64 != null
               ? MemoryImage(base64Decode(member.photoBase64!))
               : null,
           child: member.photoBase64 == null
-              ? Text(member.name.isNotEmpty ? member.name[0] : '?',
+              ? Text(member.name.isNotEmpty ? member.name[0] :
+                  (member.role.isNotEmpty ? member.role[0] : '?'),
                   style: const TextStyle(color: glightGreenDark, fontWeight: FontWeight.w700))
               : null,
         ),
-        title: Text(member.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Row(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (member.rank.isNotEmpty) Tag(member.rank),
-            if (member.role.isNotEmpty) ...[
-              const SizedBox(width: 6),
-              Text(member.role, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            ],
+            // 役名を上に表示
+            if (member.role.isNotEmpty)
+              Text(member.role,
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            // 本名を下に（役名がある場合は小さめ）
+            if (member.name.isNotEmpty)
+              Text(member.name,
+                style: TextStyle(
+                  fontSize: member.role.isNotEmpty ? 12 : 15,
+                  fontWeight: member.role.isNotEmpty
+                      ? FontWeight.w400 : FontWeight.w700,
+                  color: member.role.isNotEmpty
+                      ? cs.onSurfaceVariant : cs.onSurface)),
           ],
         ),
+        subtitle: member.rank.isNotEmpty
+            ? Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Tag(member.rank))
+            : null,
         trailing: IconButton(icon: const Icon(Icons.more_vert, size: 18),
           onPressed: () => _showOptions(context)),
         onTap: () => _showEdit(context),
@@ -150,22 +165,22 @@ class _CastEditSheetState extends State<_CastEditSheet> {
   }
 
   @override
-  void dispose() { _nameCtrl.dispose(); _roleCtrl.dispose(); _telCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _nameCtrl.dispose(); _roleCtrl.dispose(); _telCtrl.dispose();
+    super.dispose();
+  }
 
-  // 写真を選んでbase64に変換する
   Future<void> _pickPhoto() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image, withData: true);
+    final result = await pickFileForAi();
     if (result == null) return;
-    final bytes = result.files.first.bytes;
-    if (bytes == null) return;
-    // 大きすぎる画像を弾く（500KB程度まで）
-    if (bytes.length > 800 * 1024) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('画像サイズが大きすぎます（800KB以下にしてください）')));
+    if (result.bytes.length > 800 * 1024) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('画像サイズが大きすぎます（800KB以下にしてください）')));
+      }
       return;
     }
-    setState(() => _photoBase64 = base64Encode(bytes));
+    setState(() => _photoBase64 = base64Encode(result.bytes));
   }
 
   @override
@@ -173,6 +188,7 @@ class _CastEditSheetState extends State<_CastEditSheet> {
     final cs = Theme.of(context).colorScheme;
     final type = widget.provider.currentProject!.type;
     final isEdit = widget.member != null;
+    final isFilm = type == ProjectType.film;
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -220,10 +236,26 @@ class _CastEditSheetState extends State<_CastEditSheet> {
               ),
               const SizedBox(height: 20),
 
-              TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: '氏名')),
-              const SizedBox(height: 12),
-              TextField(controller: _roleCtrl,
-                decoration: InputDecoration(labelText: type == ProjectType.film ? '役名' : '肩書・役割')),
+              // 映画の場合：役名を上、本名を下
+              if (isFilm) ...[
+                TextField(controller: _roleCtrl,
+                  decoration: const InputDecoration(
+                    labelText: '役名',
+                    hintText: '例：田中 一郎')),
+                const SizedBox(height: 12),
+                TextField(controller: _nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: '役者本名（キャスト決定後に入力）',
+                    hintText: '例：山田 太郎')),
+              ] else ...[
+                // 映画以外：本名が主
+                TextField(controller: _nameCtrl,
+                  decoration: const InputDecoration(labelText: '氏名')),
+                const SizedBox(height: 12),
+                TextField(controller: _roleCtrl,
+                  decoration: const InputDecoration(labelText: '肩書・役割')),
+              ],
+
               const SizedBox(height: 12),
               if (type.castRanks.isNotEmpty) ...[
                 Text('区分', style: Theme.of(context).textTheme.labelMedium),
@@ -235,9 +267,11 @@ class _CastEditSheetState extends State<_CastEditSheet> {
                 const SizedBox(height: 12),
               ],
               TextField(controller: _telCtrl,
-                decoration: const InputDecoration(labelText: '連絡先'), keyboardType: TextInputType.phone),
+                decoration: const InputDecoration(labelText: '連絡先'),
+                keyboardType: TextInputType.phone),
               const SizedBox(height: 20),
-              ElevatedButton(onPressed: _save, child: Text(isEdit ? '更新' : '追加')),
+              ElevatedButton(onPressed: _save,
+                child: Text(isEdit ? '更新' : '追加')),
             ],
           ),
         ),
@@ -246,10 +280,20 @@ class _CastEditSheetState extends State<_CastEditSheet> {
   }
 
   void _save() {
-    if (_nameCtrl.text.trim().isEmpty) return;
+    // 映画の場合は役名が入ってればOK（本名は後から）
+    // 映画以外は本名が必須
+    final type = widget.provider.currentProject!.type;
+    final isFilm = type == ProjectType.film;
+    if (isFilm) {
+      if (_roleCtrl.text.trim().isEmpty) return;
+    } else {
+      if (_nameCtrl.text.trim().isEmpty) return;
+    }
+
     final m = CastMember(
       id: widget.member?.id, projectId: widget.projectId,
-      name: _nameCtrl.text.trim(), role: _roleCtrl.text.trim(),
+      name: _nameCtrl.text.trim(),
+      role: _roleCtrl.text.trim(),
       rank: _rank, tel: _telCtrl.text.trim(),
       availability: widget.member?.availability ?? {},
       photoBase64: _photoBase64,
@@ -274,7 +318,6 @@ class _CrewList extends StatelessWidget {
     return Scaffold(
       body: Column(
         children: [
-          // 書類から取り込みボタン
           Padding(
             padding: const EdgeInsets.all(12),
             child: OutlinedButton.icon(
@@ -295,7 +338,7 @@ class _CrewList extends StatelessWidget {
                       Color dc;
                       try {
                         final h = c.deptColor.replaceAll('#', '');
-                        dc = Color(int.parse('FF' + h, radix: 16));
+                        dc = Color(int.parse('FF$h', radix: 16));
                       } catch (_) { dc = glightGreen; }
                       return Card(
                         child: ListTile(
@@ -304,7 +347,8 @@ class _CrewList extends StatelessWidget {
                             backgroundColor: dc.withOpacity(0.18),
                             child: Text(c.name.isNotEmpty ? c.name[0] : '?',
                               style: TextStyle(color: dc, fontWeight: FontWeight.w700))),
-                          title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          title: Text(c.name,
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
                           subtitle: Row(children: [
                             if (c.dept.isNotEmpty)
                               Container(
@@ -315,12 +359,14 @@ class _CrewList extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(4),
                                   border: Border.all(color: dc.withOpacity(0.3))),
                                 child: Text(c.dept,
-                                  style: TextStyle(fontSize: 11, color: dc, fontWeight: FontWeight.w700))),
+                                  style: TextStyle(fontSize: 11, color: dc,
+                                    fontWeight: FontWeight.w700))),
                             Expanded(child: Text(
                               '${c.company.isNotEmpty ? "${c.company}　" : ""}${c.role}',
                               overflow: TextOverflow.ellipsis)),
                           ]),
-                          trailing: Text(c.tel, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          trailing: Text(c.tel,
+                            style: const TextStyle(fontSize: 12, color: Colors.grey)),
                         ),
                       );
                     },
@@ -354,23 +400,28 @@ class _CrewList extends StatelessWidget {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Text('スタッフを編集', style: Theme.of(ctx2).textTheme.titleLarge),
               const SizedBox(height: 14),
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: '氏名')),
+              TextField(controller: nameCtrl,
+                decoration: const InputDecoration(labelText: '氏名')),
               const SizedBox(height: 12),
-              TextField(controller: companyCtrl, decoration: const InputDecoration(labelText: '会社・所属')),
+              TextField(controller: companyCtrl,
+                decoration: const InputDecoration(labelText: '会社・所属')),
               const SizedBox(height: 12),
-              TextField(controller: roleCtrl, decoration: const InputDecoration(labelText: '担当')),
+              TextField(controller: roleCtrl,
+                decoration: const InputDecoration(labelText: '担当')),
               const SizedBox(height: 12),
-              TextField(controller: telCtrl, decoration: const InputDecoration(labelText: '連絡先'),
+              TextField(controller: telCtrl,
+                decoration: const InputDecoration(labelText: '連絡先'),
                 keyboardType: TextInputType.phone),
               const SizedBox(height: 14),
-              // 担当カテゴリ・色選択
               Text('担当カテゴリ', style: Theme.of(ctx2).textTheme.labelMedium),
               const SizedBox(height: 8),
               Wrap(spacing: 8, runSpacing: 8,
                 children: CrewMember.deptColors.entries.map((entry) {
                   Color c;
-                  try { final h = entry.value.replaceAll('#', ''); c = Color(int.parse('FF' + h, radix: 16)); }
-                  catch (_) { c = glightGreen; }
+                  try {
+                    final h = entry.value.replaceAll('#', '');
+                    c = Color(int.parse('FF$h', radix: 16));
+                  } catch (_) { c = glightGreen; }
                   final selected = dept == entry.key;
                   return GestureDetector(
                     onTap: () => setSt(() { dept = entry.key; deptColor = entry.value; }),
@@ -426,13 +477,17 @@ class _CrewList extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Text('スタッフを追加', style: Theme.of(ctx).textTheme.titleLarge),
           const SizedBox(height: 16),
-          TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: '氏名')),
+          TextField(controller: nameCtrl,
+            decoration: const InputDecoration(labelText: '氏名')),
           const SizedBox(height: 12),
-          TextField(controller: companyCtrl, decoration: const InputDecoration(labelText: '会社・所属')),
+          TextField(controller: companyCtrl,
+            decoration: const InputDecoration(labelText: '会社・所属')),
           const SizedBox(height: 12),
-          TextField(controller: roleCtrl, decoration: const InputDecoration(labelText: '担当')),
+          TextField(controller: roleCtrl,
+            decoration: const InputDecoration(labelText: '担当')),
           const SizedBox(height: 12),
-          TextField(controller: telCtrl, decoration: const InputDecoration(labelText: '連絡先'),
+          TextField(controller: telCtrl,
+            decoration: const InputDecoration(labelText: '連絡先'),
             keyboardType: TextInputType.phone),
           const SizedBox(height: 16),
           ElevatedButton(
@@ -463,7 +518,7 @@ class _CrewImportSheet extends StatefulWidget {
 class _CrewImportSheetState extends State<_CrewImportSheet> {
   final _textCtrl = TextEditingController();
   String _fileName = '';
-  var _pdfBytes;
+  dynamic _pdfBytes;
   bool _isLoading = false;
   String _result = '';
 
@@ -471,21 +526,14 @@ class _CrewImportSheetState extends State<_CrewImportSheet> {
   void dispose() { _textCtrl.dispose(); super.dispose(); }
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'txt', 'md', 'csv'],
-      withData: true);
+    final result = await pickFileForAi();
     if (result == null) return;
-    final file = result.files.first;
-    final bytes = file.bytes;
-    if (bytes == null) return;
-    final ext = file.extension?.toLowerCase() ?? '';
-    if (ext == 'pdf') {
-      setState(() { _pdfBytes = bytes; _fileName = file.name; _textCtrl.text = ''; });
+    if (result.isPdf) {
+      setState(() { _pdfBytes = result.bytes; _fileName = result.name; _textCtrl.text = ''; });
     } else {
       setState(() {
-        _pdfBytes = null; _fileName = file.name;
-        _textCtrl.text = utf8.decode(bytes, allowMalformed: true);
+        _pdfBytes = null; _fileName = result.name;
+        _textCtrl.text = utf8.decode(result.bytes, allowMalformed: true);
       });
     }
   }
@@ -494,12 +542,12 @@ class _CrewImportSheetState extends State<_CrewImportSheet> {
     final prefs = await SharedPreferences.getInstance();
     final apiKey = prefs.getString('gemini_api_key') ?? '';
     if (apiKey.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('先にAI解析タブでGemini APIキーを設定してください')));
       return;
     }
     if (_textCtrl.text.trim().isEmpty && _pdfBytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('ファイルを選ぶかテキストを貼り付けてください')));
       return;
     }
@@ -508,8 +556,9 @@ class _CrewImportSheetState extends State<_CrewImportSheet> {
     try {
       const prompt = '以下の書類からスタッフ・キャストの情報をJSON配列で抽出してください。'
           'JSONのみ出力し、説明は不要です。\n'
-          '[{"name":"氏名","company":"会社・所属","role":"担当・役割","tel":"連絡先","isCast":false}]\n'
-          'isCastはtrue=出演者、false=スタッフ。';
+          '脚本の場合はroleに役名を入れ、nameは空文字にしてください。\n'
+          '[{"name":"役者本名（不明なら空文字）","role":"役名または担当","company":"会社・所属","tel":"連絡先","isCast":true}]\n'
+          'isCastはtrue=出演者・役、false=スタッフ。';
 
       final parts = <Map<String, dynamic>>[
         if (_pdfBytes != null)
@@ -541,7 +590,9 @@ class _CrewImportSheetState extends State<_CrewImportSheet> {
         final m = p as Map<String, dynamic>;
         if (m['isCast'] as bool? ?? false) {
           await widget.provider.addCastMember(CastMember(projectId: pid,
-            name: m['name'] ?? '', role: m['role'] ?? '', tel: m['tel'] ?? ''));
+            name: m['name'] ?? '',       // 役者本名（脚本なら空）
+            role: m['role'] ?? '',        // 役名
+            tel: m['tel'] ?? ''));
           c++;
         } else {
           await widget.provider.addCrewMember(CrewMember(projectId: pid,
@@ -571,19 +622,21 @@ class _CrewImportSheetState extends State<_CrewImportSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('書類からスタッフを取り込む', style: Theme.of(context).textTheme.titleLarge),
+            Text('書類からスタッフを取り込む',
+              style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            Text('PDF・テキストの座組表・スタッフリストからAIが自動登録します。',
+            Text('PDF・テキストの座組表・脚本からAIが自動登録します。\n脚本の場合は役名のみ登録し、役者本名は後から入力できます。',
               style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 16),
             OutlinedButton.icon(onPressed: _pickFile,
               icon: const Icon(Icons.upload_file_outlined, size: 18),
-              label: Text(_fileName.isEmpty ? 'ファイルを選ぶ（PDF/txt/csv）' : _fileName)),
+              label: Text(_fileName.isEmpty ? 'ファイルを選ぶ（PDF/txt）' : _fileName)),
             const SizedBox(height: 12),
             if (_pdfBytes == null)
               TextField(controller: _textCtrl, maxLines: 8,
                 style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                decoration: const InputDecoration(hintText: 'または直接テキストを貼り付け')),
+                decoration: const InputDecoration(
+                  hintText: 'または直接テキストを貼り付け')),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: _isLoading ? null : _analyze,
@@ -596,7 +649,8 @@ class _CrewImportSheetState extends State<_CrewImportSheet> {
               const SizedBox(height: 12),
               Text(_result,
                 style: TextStyle(
-                  color: _result.startsWith('✓') ? glightGreen : cs.error, fontSize: 13)),
+                  color: _result.startsWith('✓') ? glightGreen : cs.error,
+                  fontSize: 13)),
             ],
           ],
         ),
