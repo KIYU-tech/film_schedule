@@ -10,44 +10,44 @@ class ProjectProvider extends ChangeNotifier {
   List<RundownItem> _rundown = [];
   List<SceneItem> _scenes = [];
   List<BroadcastSegment> _segments = [];
+  List<LocationItem> _locations = [];
+  List<EquipmentItem> _equipment = [];
+  List<BudgetItem> _budget = [];
+  List<GanttTask> _gantt = [];
   Project? _currentProject;
 
   Project? get currentProject => _currentProject;
   List<Project> get projects =>
       [..._projects]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-
   List<CastMember> get castMembers => _cast
-      .where((c) => c.projectId == _currentProject?.id)
-      .toList();
-
+      .where((c) => c.projectId == _currentProject?.id).toList();
   List<CrewMember> get crewMembers => _crew
-      .where((c) => c.projectId == _currentProject?.id)
-      .toList();
-
+      .where((c) => c.projectId == _currentProject?.id).toList();
   List<RundownItem> get rundownItems => _rundown
-      .where((r) => r.projectId == _currentProject?.id)
-      .toList()
+      .where((r) => r.projectId == _currentProject?.id).toList()
     ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
-
   List<SceneItem> get sceneItems => _scenes
-      .where((s) => s.projectId == _currentProject?.id)
-      .toList()
+      .where((s) => s.projectId == _currentProject?.id).toList()
     ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
-
   List<BroadcastSegment> get segments => _segments
-      .where((s) => s.projectId == _currentProject?.id)
-      .toList()
+      .where((s) => s.projectId == _currentProject?.id).toList()
     ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
+  List<LocationItem> get locations => _locations
+      .where((l) => l.projectId == _currentProject?.id).toList()
+    ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
+  List<GanttTask> get ganttTasks => _gantt
+      .where((g) => g.projectId == _currentProject?.id).toList();
+  List<BudgetItem> get budgetItems => _budget
+      .where((b) => b.projectId == _currentProject?.id).toList();
+  List<EquipmentItem> get equipmentItems => _equipment
+      .where((e) => e.projectId == _currentProject?.id).toList();
 
   Future<void> init() async {
     await _load();
-    if (_projects.isNotEmpty) {
-      _currentProject = _projects.first;
-    }
+    if (_projects.isNotEmpty) _currentProject = _projects.first;
     notifyListeners();
   }
 
-  // ===== 保存・読み込み =====
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     prefs.setString('projects', jsonEncode(_projects.map((p) => {
@@ -78,16 +78,40 @@ class ProjectProvider extends ChangeNotifier {
       'location': s.location, 'io': s.io,
       'timeOfDay': s.timeOfDay, 'description': s.description,
       'castIds': s.castIds, 'props': s.props,
-      'minutes': s.minutes, 'date': s.date,
-      'memo': s.memo, 'sortKey': s.sortKey,
+      'costume': s.costume, 'minutes': s.minutes,
+      'date': s.date, 'memo': s.memo, 'sortKey': s.sortKey,
     }).toList()));
     prefs.setString('segments', jsonEncode(_segments.map((s) => {
       'id': s.id, 'projectId': s.projectId, 'kind': s.kind,
       'title': s.title, 'minutes': s.minutes,
       'gameTitle': s.gameTitle, 'players': s.players,
       'telop': s.telop, 'commentMemo': s.commentMemo,
-      'obsMemo': s.obsMemo, 'memo': s.memo,
-      'sortKey': s.sortKey,
+      'obsMemo': s.obsMemo, 'memo': s.memo, 'sortKey': s.sortKey,
+    }).toList()));
+    prefs.setString('locations', jsonEncode(_locations.map((l) => {
+      'id': l.id, 'projectId': l.projectId, 'name': l.name,
+      'address': l.address, 'access': l.access,
+      'hours': l.hours, 'contact': l.contact, 'memo': l.memo,
+      'indoor': l.indoor, 'permitRequired': l.permitRequired,
+      'hasParking': l.hasParking, 'sortKey': l.sortKey,
+    }).toList()));
+    prefs.setString('gantt', jsonEncode(_gantt.map((g) => {
+      'id': g.id, 'projectId': g.projectId,
+      'category': g.category, 'name': g.name,
+      'startDate': g.startDate.toIso8601String(),
+      'endDate': g.endDate.toIso8601String(),
+      'owner': g.owner, 'progress': g.progress, 'memo': g.memo,
+    }).toList()));
+    prefs.setString('budget', jsonEncode(_budget.map((b) => {
+      'id': b.id, 'projectId': b.projectId,
+      'category': b.category, 'name': b.name,
+      'budget': b.budget, 'actual': b.actual, 'memo': b.memo,
+    }).toList()));
+    prefs.setString('equipment', jsonEncode(_equipment.map((e) => {
+      'id': e.id, 'projectId': e.projectId,
+      'category': e.category, 'name': e.name,
+      'qty': e.qty, 'owner': e.owner,
+      'memo': e.memo, 'isDone': e.isDone,
     }).toList()));
   }
 
@@ -136,8 +160,9 @@ class ProjectProvider extends ChangeNotifier {
         location: e['location'], io: e['io'],
         timeOfDay: e['timeOfDay'], description: e['description'],
         castIds: List<String>.from(e['castIds'] ?? []),
-        props: e['props'], minutes: e['minutes'],
-        date: e['date'], memo: e['memo'], sortKey: e['sortKey'],
+        props: e['props'], costume: e['costume'] ?? '',
+        minutes: e['minutes'], date: e['date'],
+        memo: e['memo'], sortKey: e['sortKey'],
       )).toList();
     }
     final sg = prefs.getString('segments');
@@ -145,47 +170,82 @@ class ProjectProvider extends ChangeNotifier {
       _segments = (jsonDecode(sg) as List).map((e) =>
         BroadcastSegment(
           id: e['id'], projectId: e['projectId'],
-          kind: e['kind'] ?? 'メイン',
-          title: e['title'] ?? '',
-          minutes: e['minutes'] ?? 0,
-          gameTitle: e['gameTitle'] ?? '',
-          players: e['players'] ?? '',
-          telop: e['telop'] ?? '',
+          kind: e['kind'] ?? 'メイン', title: e['title'] ?? '',
+          minutes: e['minutes'] ?? 0, gameTitle: e['gameTitle'] ?? '',
+          players: e['players'] ?? '', telop: e['telop'] ?? '',
           commentMemo: e['commentMemo'] ?? '',
-          obsMemo: e['obsMemo'] ?? '',
-          memo: e['memo'] ?? '',
+          obsMemo: e['obsMemo'] ?? '', memo: e['memo'] ?? '',
           sortKey: e['sortKey'] ?? 0,
         )).toList();
+    }
+    final lo = prefs.getString('locations');
+    if (lo != null) {
+      _locations = (jsonDecode(lo) as List).map((e) => LocationItem(
+        id: e['id'], projectId: e['projectId'],
+        name: e['name'] ?? '', address: e['address'] ?? '',
+        access: e['access'] ?? '', hours: e['hours'] ?? '',
+        contact: e['contact'] ?? '', memo: e['memo'] ?? '',
+        indoor: e['indoor'],
+        permitRequired: e['permitRequired'] ?? false,
+        hasParking: e['hasParking'] ?? false,
+        sortKey: e['sortKey'] ?? 0,
+      )).toList();
+    }
+    final ga = prefs.getString('gantt');
+    if (ga != null) {
+      _gantt = (jsonDecode(ga) as List).map((g) => GanttTask(
+        id: g['id'], projectId: g['projectId'],
+        category: g['category'] ?? '準備',
+        name: g['name'] ?? '',
+        startDate: DateTime.parse(g['startDate']),
+        endDate: DateTime.parse(g['endDate']),
+        owner: g['owner'] ?? '',
+        progress: g['progress'] ?? 0,
+        memo: g['memo'] ?? '',
+      )).toList();
+    }
+    final bu = prefs.getString('budget');
+    if (bu != null) {
+      _budget = (jsonDecode(bu) as List).map((b) => BudgetItem(
+        id: b['id'], projectId: b['projectId'],
+        category: b['category'] ?? 'その他',
+        name: b['name'] ?? '', budget: b['budget'] ?? 0,
+        actual: b['actual'] ?? 0, memo: b['memo'] ?? '',
+      )).toList();
+    }
+    final eq = prefs.getString('equipment');
+    if (eq != null) {
+      _equipment = (jsonDecode(eq) as List).map((e) => EquipmentItem(
+        id: e['id'], projectId: e['projectId'],
+        category: e['category'] ?? 'その他',
+        name: e['name'] ?? '', qty: e['qty'] ?? 1,
+        owner: e['owner'] ?? '', memo: e['memo'] ?? '',
+        isDone: e['isDone'] ?? false,
+      )).toList();
     }
   }
 
   // ===== プロジェクト操作 =====
   Future<Project> createProject({
-    required String title,
-    required ProjectType type,
+    required String title, required ProjectType type,
   }) async {
     final project = Project(title: title, typeKey: type.name);
     _projects.add(project);
     _currentProject = project;
-    await _save();
-    notifyListeners();
+    await _save(); notifyListeners();
     return project;
   }
-
   Future<void> openProject(String id) async {
     _currentProject = _projects.firstWhere((p) => p.id == id);
     notifyListeners();
   }
-
   Future<void> updateProject(Project project) async {
     project.updatedAt = DateTime.now();
     final i = _projects.indexWhere((p) => p.id == project.id);
     if (i >= 0) _projects[i] = project;
     if (_currentProject?.id == project.id) _currentProject = project;
-    await _save();
-    notifyListeners();
+    await _save(); notifyListeners();
   }
-
   Future<void> deleteProject(String id) async {
     _projects.removeWhere((p) => p.id == id);
     _cast.removeWhere((c) => c.projectId == id);
@@ -193,11 +253,14 @@ class ProjectProvider extends ChangeNotifier {
     _rundown.removeWhere((r) => r.projectId == id);
     _scenes.removeWhere((s) => s.projectId == id);
     _segments.removeWhere((s) => s.projectId == id);
+    _locations.removeWhere((l) => l.projectId == id);
+    _equipment.removeWhere((e) => e.projectId == id);
+    _budget.removeWhere((b) => b.projectId == id);
+    _gantt.removeWhere((g) => g.projectId == id);
     if (_currentProject?.id == id) {
       _currentProject = _projects.isNotEmpty ? _projects.first : null;
     }
-    await _save();
-    notifyListeners();
+    await _save(); notifyListeners();
   }
 
   // ===== 演者操作 =====
@@ -210,6 +273,13 @@ class ProjectProvider extends ChangeNotifier {
   }
   Future<void> deleteCastMember(String id) async {
     _cast.removeWhere((c) => c.id == id);
+    await _save(); notifyListeners();
+  }
+  Future<void> updateAvailability(
+      String castId, String date, String value) async {
+    final i = _cast.indexWhere((c) => c.id == castId);
+    if (i < 0) return;
+    _cast[i].availability[date] = value;
     await _save(); notifyListeners();
   }
 
@@ -228,8 +298,7 @@ class ProjectProvider extends ChangeNotifier {
 
   // ===== 進行表操作 =====
   Future<void> addRundownItem(RundownItem r) async {
-    r.sortKey = _rundown
-        .where((x) => x.projectId == r.projectId).length;
+    r.sortKey = _rundown.where((x) => x.projectId == r.projectId).length;
     _rundown.add(r); await _save(); notifyListeners();
   }
   Future<void> updateRundownItem(RundownItem r) async {
@@ -254,8 +323,7 @@ class ProjectProvider extends ChangeNotifier {
 
   // ===== シーン操作 =====
   Future<void> addSceneItem(SceneItem s) async {
-    s.sortKey = _scenes
-        .where((x) => x.projectId == s.projectId).length;
+    s.sortKey = _scenes.where((x) => x.projectId == s.projectId).length;
     _scenes.add(s); await _save(); notifyListeners();
   }
   Future<void> updateSceneItem(SceneItem s) async {
@@ -269,8 +337,7 @@ class ProjectProvider extends ChangeNotifier {
 
   // ===== 配信コーナー操作 =====
   Future<void> addSegment(BroadcastSegment s) async {
-    s.sortKey = _segments
-        .where((x) => x.projectId == s.projectId).length;
+    s.sortKey = _segments.where((x) => x.projectId == s.projectId).length;
     _segments.add(s); await _save(); notifyListeners();
   }
   Future<void> updateSegment(BroadcastSegment s) async {
@@ -293,35 +360,76 @@ class ProjectProvider extends ChangeNotifier {
     await _save(); notifyListeners();
   }
 
+  // ===== ロケ地操作 =====
+  Future<void> addLocation(LocationItem l) async {
+    l.sortKey = _locations.where((x) => x.projectId == l.projectId).length;
+    _locations.add(l); await _save(); notifyListeners();
+  }
+  Future<void> updateLocation(LocationItem l) async {
+    final i = _locations.indexWhere((x) => x.id == l.id);
+    if (i >= 0) _locations[i] = l; await _save(); notifyListeners();
+  }
+  Future<void> deleteLocation(String id) async {
+    _locations.removeWhere((l) => l.id == id);
+    await _save(); notifyListeners();
+  }
+
+  // ===== 機材操作 =====
+  Future<void> addEquipment(EquipmentItem e) async {
+    _equipment.add(e); await _save(); notifyListeners();
+  }
+  Future<void> updateEquipment(EquipmentItem e) async {
+    final i = _equipment.indexWhere((x) => x.id == e.id);
+    if (i >= 0) _equipment[i] = e; await _save(); notifyListeners();
+  }
+  Future<void> deleteEquipment(String id) async {
+    _equipment.removeWhere((e) => e.id == id);
+    await _save(); notifyListeners();
+  }
+
+  // ===== ガント操作 =====
+  Future<void> addGanttTask(GanttTask g) async {
+    _gantt.add(g); await _save(); notifyListeners();
+  }
+  Future<void> updateGanttTask(GanttTask g) async {
+    final i = _gantt.indexWhere((x) => x.id == g.id);
+    if (i >= 0) _gantt[i] = g; await _save(); notifyListeners();
+  }
+  Future<void> deleteGanttTask(String id) async {
+    _gantt.removeWhere((g) => g.id == id);
+    await _save(); notifyListeners();
+  }
+
+  // ===== 予算操作 =====
+  Future<void> addBudgetItem(BudgetItem b) async {
+    _budget.add(b); await _save(); notifyListeners();
+  }
+  Future<void> updateBudgetItem(BudgetItem b) async {
+    final i = _budget.indexWhere((x) => x.id == b.id);
+    if (i >= 0) _budget[i] = b; await _save(); notifyListeners();
+  }
+  Future<void> deleteBudgetItem(String id) async {
+    _budget.removeWhere((b) => b.id == id);
+    await _save(); notifyListeners();
+  }
+
   // ===== 時刻計算 =====
   List<Map<String, dynamic>> calcRundownTimes(String startTime) {
     final parts = startTime.split(':');
     int total = int.parse(parts[0]) * 60 + int.parse(parts[1]);
     return rundownItems.map((r) {
-      final start = total;
-      total += r.minutes;
-      return {
-        'item': r,
-        'startLabel': _toHM(start),
-        'endLabel': _toHM(total),
-      };
+      final start = total; total += r.minutes;
+      return {'item': r, 'startLabel': _toHM(start), 'endLabel': _toHM(total)};
     }).toList();
   }
-
   List<Map<String, dynamic>> calcSegmentTimes(String startTime) {
     final parts = startTime.split(':');
     int total = int.parse(parts[0]) * 60 + int.parse(parts[1]);
     return segments.map((s) {
-      final start = total;
-      total += s.minutes;
-      return {
-        'segment': s,
-        'startLabel': _toHM(start),
-        'endLabel': _toHM(total),
-      };
+      final start = total; total += s.minutes;
+      return {'segment': s, 'startLabel': _toHM(start), 'endLabel': _toHM(total)};
     }).toList();
   }
-
   String _toHM(int min) {
     final h = (min ~/ 60) % 24;
     final m = min % 60;

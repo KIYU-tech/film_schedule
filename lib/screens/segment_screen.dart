@@ -25,12 +25,10 @@ class _SegmentScreenState extends State<SegmentScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // 番組種別選択バー
           _GenreBar(
             selected: _genre,
             onChanged: (g) => setState(() => _genre = g),
           ),
-          // ヘッダー
           if (segments.isNotEmpty)
             Container(
               padding: const EdgeInsets.symmetric(
@@ -39,21 +37,17 @@ class _SegmentScreenState extends State<SegmentScreen> {
               child: Row(
                 children: [
                   Text('$_startTime 開始',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700)),
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
                   const SizedBox(width: 12),
                   Text('合計 ${totalMin}分',
-                    style: TextStyle(
-                      color: Colors.grey[500], fontSize: 13)),
+                    style: TextStyle(color: Colors.grey[500], fontSize: 13)),
                   const Spacer(),
                   Text(
                     '終了 ${timed.isNotEmpty ? timed.last['endLabel'] : '--:--'}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600)),
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
-          // コーナーリスト
           Expanded(
             child: segments.isEmpty
                 ? Center(
@@ -64,12 +58,10 @@ class _SegmentScreenState extends State<SegmentScreen> {
                           size: 56, color: Colors.grey[700]),
                         const SizedBox(height: 12),
                         Text('コーナーがありません',
-                          style: TextStyle(
-                            color: Colors.grey[500])),
+                          style: TextStyle(color: Colors.grey[500])),
                         const SizedBox(height: 16),
                         OutlinedButton(
-                          onPressed: () =>
-                            _addPreset(context, provider),
+                          onPressed: () => _addPreset(context, provider),
                           child: const Text('基本構成を入れる'),
                         ),
                       ],
@@ -82,8 +74,7 @@ class _SegmentScreenState extends State<SegmentScreen> {
                       provider.reorderSegments(old, nw),
                     itemBuilder: (_, i) {
                       final t = timed[i];
-                      final seg =
-                        t['segment'] as BroadcastSegment;
+                      final seg = t['segment'] as BroadcastSegment;
                       return _SegmentTile(
                         key: ValueKey(seg.id),
                         segment: seg,
@@ -119,8 +110,7 @@ class _SegmentScreenState extends State<SegmentScreen> {
     );
   }
 
-  Future<void> _addPreset(
-      BuildContext ctx, ProjectProvider provider) async {
+  Future<void> _addPreset(BuildContext ctx, ProjectProvider provider) async {
     final presets = [
       ('オープニング', 'OP・挨拶', 5),
       ('メイン', 'メインコーナー', 30),
@@ -139,7 +129,6 @@ class _SegmentScreenState extends State<SegmentScreen> {
   }
 }
 
-// 番組種別選択バー
 class _GenreBar extends StatelessWidget {
   final BroadcastGenre selected;
   final ValueChanged<BroadcastGenre> onChanged;
@@ -152,8 +141,7 @@ class _GenreBar extends StatelessWidget {
       color: Theme.of(context).colorScheme.surface,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         children: BroadcastGenre.values.map((g) {
           final isSelected = g == selected;
           return GestureDetector(
@@ -161,25 +149,18 @@ class _GenreBar extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
-                color: isSelected
-                    ? glightGreen
-                    : Colors.transparent,
+                color: isSelected ? glightGreen : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(
-                  color: isSelected
-                      ? glightGreen
-                      : Colors.grey.shade700),
+                  color: isSelected ? glightGreen : Colors.grey.shade700),
               ),
               child: Text(g.label,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: isSelected
-                      ? Colors.black
-                      : Colors.grey.shade400)),
+                  color: isSelected ? Colors.black : Colors.grey.shade400)),
             ),
           );
         }).toList(),
@@ -188,7 +169,6 @@ class _GenreBar extends StatelessWidget {
   }
 }
 
-// コーナータイル
 class _SegmentTile extends StatelessWidget {
   final BroadcastSegment segment;
   final String startLabel;
@@ -208,13 +188,13 @@ class _SegmentTile extends StatelessWidget {
   Color _kindColor() {
     switch (segment.kind) {
       case 'オープニング': return Colors.teal.shade400;
-      case 'メイン':     return glightGreen;
-      case 'ゲーム':     return Colors.purple.shade400;
-      case 'インタビュー':return Colors.blue.shade400;
-      case 'トーク':     return Colors.orange.shade400;
-      case 'エンディング':return Colors.pink.shade400;
-      case 'CM・休憩':   return Colors.grey.shade500;
-      default:          return Colors.grey.shade600;
+      case 'メイン':      return glightGreen;
+      case 'ゲーム':      return Colors.purple.shade400;
+      case 'インタビュー': return Colors.blue.shade400;
+      case 'トーク':      return Colors.orange.shade400;
+      case 'エンディング': return Colors.pink.shade400;
+      case 'CM・休憩':    return Colors.grey.shade500;
+      default:            return Colors.grey.shade600;
     }
   }
 
@@ -230,27 +210,22 @@ class _SegmentTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 上段：時刻・種別・タイトル
               Row(
                 children: [
-                  // 時刻
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(startLabel,
                         style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 13,
+                          fontFamily: 'monospace', fontSize: 13,
                           fontWeight: FontWeight.w700)),
                       Text(endLabel,
                         style: TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11,
+                          fontFamily: 'monospace', fontSize: 11,
                           color: cs.onSurface.withOpacity(0.5))),
                     ],
                   ),
                   const SizedBox(width: 12),
-                  // 種別バッジ
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 3),
@@ -262,30 +237,26 @@ class _SegmentTile extends StatelessWidget {
                     ),
                     child: Text(segment.kind,
                       style: TextStyle(
-                        fontSize: 11,
-                        color: _kindColor(),
+                        fontSize: 11, color: _kindColor(),
                         fontWeight: FontWeight.w700)),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(segment.title,
                       style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15),
+                        fontWeight: FontWeight.w700, fontSize: 15),
                       overflow: TextOverflow.ellipsis)),
                   Text('${segment.minutes}分',
                     style: TextStyle(
                       fontSize: 12,
                       color: cs.onSurface.withOpacity(0.5))),
                   IconButton(
-                    icon: Icon(Icons.more_vert,
-                      size: 18,
+                    icon: Icon(Icons.more_vert, size: 18,
                       color: cs.onSurface.withOpacity(0.4)),
                     onPressed: () => _showOptions(context),
                   ),
                 ],
               ),
-              // 下段：番組種別ごとの項目
               if (segment.gameTitle.isNotEmpty ||
                   segment.players.isNotEmpty ||
                   segment.telop.isNotEmpty ||
@@ -298,20 +269,18 @@ class _SegmentTile extends StatelessWidget {
                   spacing: 12, runSpacing: 6,
                   children: [
                     if (segment.gameTitle.isNotEmpty)
-                      _infoItem(Icons.sports_esports_outlined,
+                      _info(Icons.sports_esports_outlined,
                         segment.gameTitle),
                     if (segment.players.isNotEmpty)
-                      _infoItem(Icons.person_outline,
-                        segment.players),
+                      _info(Icons.person_outline, segment.players),
                     if (segment.telop.isNotEmpty)
-                      _infoItem(Icons.closed_caption_outlined,
+                      _info(Icons.closed_caption_outlined,
                         segment.telop),
                     if (segment.commentMemo.isNotEmpty)
-                      _infoItem(Icons.chat_bubble_outline,
+                      _info(Icons.chat_bubble_outline,
                         segment.commentMemo),
                     if (segment.obsMemo.isNotEmpty)
-                      _infoItem(Icons.videocam_outlined,
-                        segment.obsMemo),
+                      _info(Icons.videocam_outlined, segment.obsMemo),
                   ],
                 ),
               ],
@@ -322,15 +291,13 @@ class _SegmentTile extends StatelessWidget {
     );
   }
 
-  Widget _infoItem(IconData icon, String text) {
+  Widget _info(IconData icon, String text) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 13, color: Colors.grey),
         const SizedBox(width: 4),
-        Text(text,
-          style: const TextStyle(
-            fontSize: 12, color: Colors.grey)),
+        Text(text, style: const TextStyle(fontSize: 12, color: Colors.grey)),
       ],
     );
   }
@@ -348,8 +315,7 @@ class _SegmentTile extends StatelessWidget {
               onTap: () { Navigator.pop(ctx); _showEdit(ctx); },
             ),
             ListTile(
-              leading: const Icon(
-                Icons.delete_outline, color: Colors.red),
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
               title: const Text('削除',
                 style: TextStyle(color: Colors.red)),
               onTap: () {
@@ -378,7 +344,6 @@ class _SegmentTile extends StatelessWidget {
   }
 }
 
-// コーナー編集シート
 class _SegmentEditSheet extends StatefulWidget {
   final String projectId;
   final ProjectProvider provider;
@@ -393,8 +358,7 @@ class _SegmentEditSheet extends StatefulWidget {
   });
 
   @override
-  State<_SegmentEditSheet> createState() =>
-    _SegmentEditSheetState();
+  State<_SegmentEditSheet> createState() => _SegmentEditSheetState();
 }
 
 class _SegmentEditSheetState extends State<_SegmentEditSheet> {
@@ -412,18 +376,16 @@ class _SegmentEditSheetState extends State<_SegmentEditSheet> {
   void initState() {
     super.initState();
     final s = widget.segment;
-    _titleCtrl   = TextEditingController(text: s?.title ?? '');
-    _minCtrl     = TextEditingController(
+    _titleCtrl    = TextEditingController(text: s?.title ?? '');
+    _minCtrl      = TextEditingController(
       text: s != null && s.minutes > 0 ? '${s.minutes}' : '');
-    _gameTitleCtrl = TextEditingController(
-      text: s?.gameTitle ?? '');
-    _playersCtrl = TextEditingController(text: s?.players ?? '');
-    _telopCtrl   = TextEditingController(text: s?.telop ?? '');
-    _commentCtrl = TextEditingController(
-      text: s?.commentMemo ?? '');
-    _obsCtrl     = TextEditingController(text: s?.obsMemo ?? '');
-    _memoCtrl    = TextEditingController(text: s?.memo ?? '');
-    _kind        = s?.kind ?? 'メイン';
+    _gameTitleCtrl = TextEditingController(text: s?.gameTitle ?? '');
+    _playersCtrl  = TextEditingController(text: s?.players ?? '');
+    _telopCtrl    = TextEditingController(text: s?.telop ?? '');
+    _commentCtrl  = TextEditingController(text: s?.commentMemo ?? '');
+    _obsCtrl      = TextEditingController(text: s?.obsMemo ?? '');
+    _memoCtrl     = TextEditingController(text: s?.memo ?? '');
+    _kind         = s?.kind ?? 'メイン';
   }
 
   @override
@@ -439,7 +401,6 @@ class _SegmentEditSheetState extends State<_SegmentEditSheet> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isEdit = widget.segment != null;
-    final customFields = widget.genre.customFields;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.85,
@@ -467,8 +428,7 @@ class _SegmentEditSheetState extends State<_SegmentEditSheet> {
                 children: [
                   Text(isEdit ? 'コーナーを編集' : 'コーナーを追加',
                     style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700)),
+                      fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -478,8 +438,7 @@ class _SegmentEditSheetState extends State<_SegmentEditSheet> {
                       borderRadius: BorderRadius.circular(6)),
                     child: Text(widget.genre.label,
                       style: const TextStyle(
-                        fontSize: 11,
-                        color: glightGreen,
+                        fontSize: 11, color: glightGreen,
                         fontWeight: FontWeight.w700)),
                   ),
                   const Spacer(),
@@ -499,10 +458,8 @@ class _SegmentEditSheetState extends State<_SegmentEditSheet> {
             Expanded(
               child: ListView(
                 controller: controller,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
-                  // 種別選択
                   Text('コーナー種別',
                     style: TextStyle(
                       fontSize: 13, color: Colors.grey[600])),
@@ -519,7 +476,6 @@ class _SegmentEditSheetState extends State<_SegmentEditSheet> {
                       )).toList(),
                   ),
                   const SizedBox(height: 14),
-                  // タイトル・尺
                   Row(children: [
                     Expanded(
                       flex: 3,
@@ -535,51 +491,34 @@ class _SegmentEditSheetState extends State<_SegmentEditSheet> {
                           labelText: '尺（分）'),
                         keyboardType: TextInputType.number)),
                   ]),
-                  const SizedBox(height: 14),
-                  // 番組種別ごとの項目
-                  if (customFields.contains('ゲームタイトル') ||
-                      customFields.contains('ゲームタイトル・機種・プラットフォーム')) ...[
-                    TextField(
-                      controller: _gameTitleCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'ゲームタイトル',
-                        hintText: '例：マリオカート8DX')),
-                    const SizedBox(height: 12),
-                  ],
-                  if (customFields.contains('プレイヤー名') ||
-                      customFields.contains('出場チーム')) ...[
-                    TextField(
-                      controller: _playersCtrl,
-                      decoration: InputDecoration(
-                        labelText: customFields
-                          .contains('出場チーム')
-                            ? '出場チーム' : 'プレイヤー・出演者',
-                        hintText: '例：チームA vs チームB')),
-                    const SizedBox(height: 12),
-                  ],
-                  // テロップ
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _gameTitleCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'ゲームタイトル',
+                      hintText: '例：マリオカート8DX')),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _playersCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'プレイヤー・出演者')),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _telopCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'テロップ内容',
-                      hintText: '例：＃ゲーム実況　本日のゲスト：〇〇'),
+                      labelText: 'テロップ内容'),
                     maxLines: 2),
                   const SizedBox(height: 12),
-                  // コメント・配信橋メモ
                   TextField(
                     controller: _commentCtrl,
                     decoration: const InputDecoration(
-                      labelText: '配信橋・コメントメモ',
-                      hintText: '例：コメントを読みながら進行'),
+                      labelText: '配信橋・コメントメモ'),
                     maxLines: 2),
                   const SizedBox(height: 12),
-                  // OBSメモ
                   TextField(
                     controller: _obsCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'OBSシーン・切り替えメモ',
-                      hintText: '例：シーン2「ゲーム画面」に切り替え'),
-                  ),
+                      labelText: 'OBSシーン・切り替えメモ')),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _memoCtrl,

@@ -2,6 +2,7 @@ import 'package:uuid/uuid.dart';
 
 const _uuid = Uuid();
 
+// ===== 制作の種類 =====
 enum ProjectType {
   film,
   broadcast,
@@ -101,6 +102,7 @@ extension ProjectTypeExt on ProjectType {
   }
 }
 
+// ===== プロジェクト =====
 class Project {
   String id;
   String title;
@@ -137,8 +139,7 @@ class Project {
 
   ProjectType get type {
     try {
-      return ProjectType.values
-          .firstWhere((e) => e.name == typeKey);
+      return ProjectType.values.firstWhere((e) => e.name == typeKey);
     } catch (_) {
       return ProjectType.film;
     }
@@ -174,6 +175,7 @@ class Project {
   }
 }
 
+// ===== 演者 =====
 class CastMember {
   String id;
   String projectId;
@@ -197,6 +199,7 @@ class CastMember {
         availability = availability ?? {};
 }
 
+// ===== スタッフ =====
 class CrewMember {
   String id;
   String projectId;
@@ -217,6 +220,7 @@ class CrewMember {
   }) : id = id ?? _uuid.v4();
 }
 
+// ===== 進行表アイテム =====
 class RundownItem {
   String id;
   String projectId;
@@ -243,6 +247,7 @@ class RundownItem {
   ];
 }
 
+// ===== 香盤表シーン =====
 class SceneItem {
   String id;
   String projectId;
@@ -277,7 +282,8 @@ class SceneItem {
   })  : id = id ?? _uuid.v4(),
         castIds = castIds ?? [];
 }
-// 配信番組の種別
+
+// ===== 配信番組種別 =====
 enum BroadcastGenre {
   vtuber,
   gameShow,
@@ -299,7 +305,6 @@ extension BroadcastGenreExt on BroadcastGenre {
     }
   }
 
-  // 番組種別ごとの専用項目
   List<String> get customFields {
     switch (this) {
       case BroadcastGenre.vtuber:
@@ -318,18 +323,18 @@ extension BroadcastGenreExt on BroadcastGenre {
   }
 }
 
-// 配信コーナー
+// ===== 配信コーナー =====
 class BroadcastSegment {
   String id;
   String projectId;
-  String kind;        // オープニング/メイン/コーナー/エンディング/CM/休憩
-  String title;       // コーナー名
-  int minutes;        // 尺（分）
-  String gameTitle;   // ゲームタイトル（ゲーム系）
-  String players;     // プレイヤー・出演者
-  String telop;       // テロップ内容
-  String commentMemo; // コメント・配信橋メモ
-  String obsMemo;     // OBSシーン切り替えメモ
+  String kind;
+  String title;
+  int minutes;
+  String gameTitle;
+  String players;
+  String telop;
+  String commentMemo;
+  String obsMemo;
   String memo;
   int sortKey;
 
@@ -346,7 +351,7 @@ class BroadcastSegment {
     this.obsMemo = '',
     this.memo = '',
     this.sortKey = 0,
-  }) : id = id ?? const Uuid().v4();
+  }) : id = id ?? _uuid.v4();
 
   static const List<String> kinds = [
     'オープニング','メイン','コーナー','ゲーム','インタビュー',
@@ -354,5 +359,102 @@ class BroadcastSegment {
   ];
 }
 
-// 映画シーン（既存のSceneItemと同じだが明示的に再定義）
-// ※ SceneItemはproject.dartに既にあるのでそのまま使う
+// ===== ロケ地 =====
+class LocationItem {
+  String id;
+  String projectId;
+  String name;
+  String address;
+  String access;
+  String hours;
+  String contact;
+  String memo;
+  bool? indoor;
+  bool permitRequired;
+  bool hasParking;
+  int sortKey;
+
+  LocationItem({
+    String? id,
+    required this.projectId,
+    this.name = '',
+    this.address = '',
+    this.access = '',
+    this.hours = '',
+    this.contact = '',
+    this.memo = '',
+    this.indoor,
+    this.permitRequired = false,
+    this.hasParking = false,
+    this.sortKey = 0,
+  }) : id = id ?? _uuid.v4();
+}
+
+// ===== 機材 =====
+class EquipmentItem {
+  String id;
+  String projectId;
+  String category;
+  String name;
+  int qty;
+  String owner;
+  String memo;
+  bool isDone;
+
+  EquipmentItem({
+    String? id,
+    required this.projectId,
+    this.category = 'その他',
+    this.name = '',
+    this.qty = 1,
+    this.owner = '',
+    this.memo = '',
+    this.isDone = false,
+  }) : id = id ?? _uuid.v4();
+}
+
+// ===== 予算 =====
+class BudgetItem {
+  String id;
+  String projectId;
+  String category;
+  String name;
+  int budget;
+  int actual;
+  String memo;
+
+  BudgetItem({
+    String? id,
+    required this.projectId,
+    this.category = 'その他',
+    this.name = '',
+    this.budget = 0,
+    this.actual = 0,
+    this.memo = '',
+  }) : id = id ?? _uuid.v4();
+}
+
+// ===== ガントチャート =====
+class GanttTask {
+  String id;
+  String projectId;
+  String category;
+  String name;
+  DateTime startDate;
+  DateTime endDate;
+  String owner;
+  int progress; // 0-100
+  String memo;
+
+  GanttTask({
+    String? id,
+    required this.projectId,
+    this.category = '準備',
+    this.name = '',
+    required this.startDate,
+    required this.endDate,
+    this.owner = '',
+    this.progress = 0,
+    this.memo = '',
+  }) : id = id ?? _uuid.v4();
+}
